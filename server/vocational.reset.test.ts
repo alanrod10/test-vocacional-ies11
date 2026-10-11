@@ -57,17 +57,11 @@ describe("reinicio protegido de resultados", () => {
   const configuredPassword = process.env.ADMIN_ACTION_PASSWORD!;
 
   it("bloquea el reinicio para preservar el archivo histórico", async () => {
-    const prevMode = process.env.INSTANCE_MODE;
-    process.env.INSTANCE_MODE = "historical";
-    try {
-      const caller = appRouter.createCaller(publicContext());
-      mocks.rows = [exampleAssessment()];
-      await expect(caller.vocational.createResetChallenge()).rejects.toMatchObject({ code: "FORBIDDEN" });
-      await expect(caller.vocational.reset({ challenge: "x".repeat(20), password: configuredPassword, backupReceipt: "00000000-0000-4000-8000-000000000000" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-      expect(mocks.deleteAll).not.toHaveBeenCalled();
-    } finally {
-      process.env.INSTANCE_MODE = prevMode;
-    }
+    const caller = appRouter.createCaller(publicContext());
+    mocks.rows = [exampleAssessment()];
+    await expect(caller.vocational.createResetChallenge()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.vocational.reset({ challenge: "x".repeat(20), password: configuredPassword, backupReceipt: "00000000-0000-4000-8000-000000000000" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.deleteAll).not.toHaveBeenCalled();
   });
 
   it("limita los intentos fallidos de contraseña para proteger las acciones administrativas", async () => {

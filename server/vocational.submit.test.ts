@@ -4,11 +4,17 @@ import type { TrpcContext } from "./_core/context";
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   list: vi.fn(),
+  recordAdminAction: vi.fn(),
 }));
 
 vi.mock("./db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./db")>();
-  return { ...actual, createVocationalAssessment: mocks.create, listVocationalAssessments: mocks.list };
+  return {
+    ...actual,
+    createVocationalAssessment: mocks.create,
+    listVocationalAssessments: mocks.list,
+    recordVocationalAdminAction: mocks.recordAdminAction,
+  };
 });
 
 import { appRouter } from "./routers";
@@ -75,32 +81,22 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.create.mockResolvedValue(42);
   mocks.list.mockResolvedValue([]);
+  mocks.recordAdminAction.mockResolvedValue(undefined);
 });
 
 describe("registro vocacional sin teléfono", () => {
   it("bloquea nuevas evaluaciones para preservar el cierre histórico", async () => {
-    const prevMode = process.env.INSTANCE_MODE;
-    process.env.INSTANCE_MODE = "historical";
-    try {
-      const caller = appRouter.createCaller(publicContext());
-      await expect(caller.vocational.submit(validInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
-      expect(mocks.create).not.toHaveBeenCalled();
-    } finally {
-      process.env.INSTANCE_MODE = prevMode;
-    }
+    const caller = appRouter.createCaller(publicContext());
+    await expect(caller.vocational.submit(validInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 
   it("permite nuevas evaluaciones cuando opera en modo permanente", async () => {
-    const prevMode = process.env.INSTANCE_MODE;
     process.env.INSTANCE_MODE = "permanent";
-    try {
-      const caller = appRouter.createCaller(publicContext());
-      const response = await caller.vocational.submit(validInput);
-      expect(response.id).toBe(42);
-      expect(mocks.create).toHaveBeenCalled();
-    } finally {
-      process.env.INSTANCE_MODE = prevMode;
-    }
+    const caller = appRouter.createCaller(publicContext());
+    const response = await caller.vocational.submit(validInput);
+    expect(response.id).toBe(42);
+    expect(mocks.create).toHaveBeenCalled();
   });
 
   it("valida la contraseña privada configurada mediante una llamada administrativa liviana", async () => {
