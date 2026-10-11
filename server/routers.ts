@@ -1,11 +1,13 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router, viewerProcedure } from "./_core/trpc";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { buildVocationalCsv, createVocationalAssessment, deleteAllVocationalAssessments, listVocationalAssessments, recordVocationalAdminAction } from "./db";
+import { buildVocationalCsv, createVocationalAssessment, deleteAllVocationalAssessments, getAdminUserByUsername, listVocationalAssessments, recordVocationalAdminAction } from "./db";
+import { clearAdminCookie, setAdminCookie, signAdminToken } from "./_core/adminAuth";
 import { CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, getInterestProfile, hasScorableSignal, scoreSelections } from "../shared/vocational";
 import { HISTORICAL_ARCHIVE, HISTORICAL_ARCHIVE_MESSAGE } from "../shared/archive";
 
@@ -208,6 +210,46 @@ export const appRouter = router({
     }),
   }),
 
+  adminAuth: router({
+    login: publicProcedure
+      .input(z.object({ username: z.string().trim().min(1, "El usuario es obligatorio"), password: z.string().min(1, "La contraseña es obligatoria") }))
+      .mutation(async ({ input, ctx }) => {
+        enforceAdminRateLimit(ctx.req, "admin_login");
+        const user = await getAdminUserByUsername(input.username);
+        if (!user) {
+          await recordVocationalAdminAction("login", "denied", { username: input.username }, ctx.clientIp, input.username);
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Credenciales incorrectas." });
+        }
+        const matches = await bcrypt.compare(input.password, user.passwordHash);
+        if (!matches) {
+          await recordVocationalAdminAction("login", "denied", { username: input.username }, ctx.clientIp, input.username);
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Credenciales incorrectas." });
+        }
+        clearAdminRateLimit(ctx.req, "admin_login");
+        const token = await signAdminToken({
+          id: user.id,
+          username: user.username,
+          role: user.role,
+        });
+        setAdminCookie(ctx.res as any, token);
+        await recordVocationalAdminAction("login", "success", { username: user.username, role: user.role }, ctx.clientIp, user.username);
+        return {
+          success: true,
+          user: { id: user.id, username: user.username, role: user.role },
+        };
+      }),
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      if (ctx.adminUser) {
+        await recordVocationalAdminAction("logout", "success", {}, ctx.clientIp, ctx.adminUser.username);
+      }
+      clearAdminCookie(ctx.res as any);
+      return { success: true };
+    }),
+    me: publicProcedure.query(({ ctx }) => {
+      return ctx.adminUser;
+    }),
+  }),
+
   vocational: router({
     submit: publicProcedure.input(assessmentInput).mutation(async ({ input }) => {
       requireOpenHistoricalArchive("assessment");
@@ -233,28 +275,10 @@ export const appRouter = router({
       });
       return { id, winner, topThree: scores.slice(0, 3), interestProfile: getInterestProfile(input.selections) };
     }),
-    analytics: publicProcedure.query(async () => calculateAnalytics(await listVocationalAssessments())),
-    verifyAdminPassword: publicProcedure.input(z.object({ password: z.string().min(1).max(256) })).mutation(async ({ input, ctx }) => {
-      enforceAdminRateLimit(ctx.req, "verify");
-      const actor = ctx.user?.name || ctx.user?.openId || "admin";
-      try {
-        requireAdminPassword(input.password);
-      } catch (error) {
-        await recordVocationalAdminAction("verify", "denied", {}, ctx.clientIp, actor);
-        throw error;
-      }
-      clearAdminRateLimit(ctx.req, "verify");
-      return { authorized: true };
-    }),
-    exportCsv: publicProcedure.input(z.object({ password: z.string().min(1).max(256) })).mutation(async ({ input, ctx }) => {
+    analytics: viewerProcedure.query(async () => calculateAnalytics(await listVocationalAssessments())),
+    exportCsv: adminProcedure.mutation(async ({ ctx }) => {
       enforceAdminRateLimit(ctx.req, "export");
-      const actor = ctx.user?.name || ctx.user?.openId || "admin";
-      try {
-        requireAdminPassword(input.password);
-      } catch (error) {
-        await recordVocationalAdminAction("export_csv", "denied", {}, ctx.clientIp, actor);
-        throw error;
-      }
+      const actor = ctx.adminUser.username;
       clearAdminRateLimit(ctx.req, "export");
       const rows = await listVocationalAssessments();
       const content = buildVocationalCsv(rows);
@@ -267,20 +291,14 @@ export const appRouter = router({
         backupReceipt,
       };
     }),
-    createResetChallenge: publicProcedure.mutation(() => {
+    createResetChallenge: adminProcedure.mutation(() => {
       requireOpenHistoricalArchive("reset");
       return { challenge: createResetChallenge() };
     }),
-    reset: publicProcedure.input(z.object({ challenge: z.string().min(20).max(500), password: z.string().min(1).max(256), backupReceipt: z.string().uuid() })).mutation(async ({ input, ctx }) => {
+    reset: adminProcedure.input(z.object({ challenge: z.string().min(20).max(500), backupReceipt: z.string().uuid() })).mutation(async ({ input, ctx }) => {
       requireOpenHistoricalArchive("reset");
       enforceAdminRateLimit(ctx.req, "reset");
-      const actor = ctx.user?.name || ctx.user?.openId || "admin";
-      try {
-        requireAdminPassword(input.password);
-      } catch (error) {
-        await recordVocationalAdminAction("reset", "denied", {}, ctx.clientIp, actor);
-        throw error;
-      }
+      const actor = ctx.adminUser.username;
       clearAdminRateLimit(ctx.req, "reset");
       if (!isValidResetChallenge(input.challenge)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "La confirmación de reinicio venció o no es válida." });

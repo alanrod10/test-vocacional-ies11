@@ -1,4 +1,3 @@
-import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
@@ -10,36 +9,50 @@ const t = initTRPC.context<TrpcContext>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-const requireUser = t.middleware(async opts => {
+// Middleware para usuarios con rol de visualizador o superior (viewer o admin)
+const requireViewer = t.middleware(async (opts) => {
   const { ctx, next } = opts;
 
-  if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  if (!ctx.adminUser) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Se requiere iniciar sesión en el panel de administración.",
+    });
   }
 
   return next({
     ctx: {
       ...ctx,
-      user: ctx.user,
+      adminUser: ctx.adminUser,
     },
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+// Middleware para acciones exclusivas de administradores (rol admin)
+const requireAdmin = t.middleware(async (opts) => {
+  const { ctx, next } = opts;
 
-export const adminProcedure = t.procedure.use(
-  t.middleware(async opts => {
-    const { ctx, next } = opts;
-
-    if (!ctx.user || ctx.user.role !== 'admin') {
-      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
+  if (!ctx.adminUser) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Se requiere iniciar sesión en el panel de administración.",
     });
-  }),
-);
+  }
+
+  if (ctx.adminUser.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Se requieren permisos de administrador (rol admin) para realizar esta acción.",
+    });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      adminUser: ctx.adminUser,
+    },
+  });
+});
+
+export const viewerProcedure = t.procedure.use(requireViewer);
+export const adminProcedure = t.procedure.use(requireAdmin);

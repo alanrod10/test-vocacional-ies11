@@ -20,8 +20,8 @@ vi.mock("./db", async (importOriginal) => {
 import { appRouter } from "./routers";
 import { CATALOG_VERSION, QUESTIONNAIRE_VERSION, QUESTIONS, scoreSelections } from "../shared/vocational";
 
-function publicContext() {
-  return { user: null, req: { protocol: "https", headers: {}, ip: "127.0.0.1" }, res: {}, clientIp: "127.0.0.1" } as TrpcContext;
+function publicContext(): TrpcContext {
+  return { user: null, adminUser: null, req: { protocol: "https", headers: {}, ip: "127.0.0.1" } as any, res: {} as any, clientIp: "127.0.0.1" };
 }
 
 function parseQuotedCsvRow(row: string, delimiter = ";") {
@@ -61,22 +61,24 @@ const validInput = {
   selections: [1, 1, 2, 0, 1, 0, 3, 3, 1, 1, 1, 1, 7, 0],
 };
 
-function adminContext() {
+function adminContext(): TrpcContext {
   return {
-    user: { id: 1, openId: "coordinacion-ies11", name: "Coordinación", email: null, loginMethod: "oauth", role: "admin", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
-    req: { protocol: "https", headers: {}, ip: "127.0.0.1" },
-    res: {},
+    user: null,
+    adminUser: { id: 1, username: "admin", role: "admin" },
+    req: { protocol: "https", headers: {}, ip: "127.0.0.1" } as any,
+    res: { cookie: vi.fn(), clearCookie: vi.fn() } as any,
     clientIp: "127.0.0.1",
-  } as TrpcContext;
+  };
 }
 
-function userContext() {
+function viewerContext(): TrpcContext {
   return {
-    user: { id: 2, openId: "visitante-ies11", name: "Visitante", email: null, loginMethod: "oauth", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
-    req: { protocol: "https", headers: {}, ip: "127.0.0.1" },
-    res: {},
+    user: null,
+    adminUser: { id: 2, username: "viewer", role: "viewer" },
+    req: { protocol: "https", headers: {}, ip: "127.0.0.1" } as any,
+    res: { cookie: vi.fn(), clearCookie: vi.fn() } as any,
     clientIp: "127.0.0.1",
-  } as TrpcContext;
+  };
 }
 
 beforeEach(() => {
@@ -101,25 +103,15 @@ describe("registro vocacional sin teléfono", () => {
     expect(mocks.create).toHaveBeenCalled();
   });
 
-  it("valida la contraseña privada configurada mediante una llamada administrativa liviana", async () => {
-    const configuredPassword = process.env.ADMIN_ACTION_PASSWORD;
-    expect(configuredPassword).toBeTruthy();
-
-    const caller = appRouter.createCaller(publicContext());
-    await expect(caller.vocational.verifyAdminPassword({ password: configuredPassword! })).resolves.toEqual({ authorized: true });
-    await expect(caller.vocational.verifyAdminPassword({ password: "contraseña-incorrecta" })).rejects.toBeTruthy();
-  });
-
-  it("solo permite el CSV completo con la contraseña privada y entrega columnas tabulares para análisis", async () => {
+  it("solo permite el CSV completo a usuarios con rol admin y bloquea público y observadores", async () => {
     const csvSelections = [1, 0, 2, 3, 1, 2, 0, 3, 1, 1, 0, 1, 7, 0];
     const csvScores = scoreSelections(csvSelections);
     mocks.list.mockResolvedValue([{ id: 7, firstName: "Ana", lastName: "Prueba", age: 18, sex: "Femenino", studyIntent: "Sí", locality: "San Salvador de Jujuy", educationStatus: "Secundario", discoverySource: "No informado", dataConsent: true, resultProgram: csvScores[0].program, resultArea: csvScores[0].area, selections: csvSelections, scoreSnapshot: csvScores, questionnaireVersion: QUESTIONNAIRE_VERSION, catalogVersion: CATALOG_VERSION, createdAt: new Date("2026-08-19T00:00:00.000Z") }]);
-    const configuredPassword = process.env.ADMIN_ACTION_PASSWORD;
-    expect(configuredPassword).toBeTruthy();
-    await expect(appRouter.createCaller(publicContext()).vocational.exportCsv({ password: "contraseña-incorrecta" })).rejects.toBeTruthy();
-    await expect(appRouter.createCaller(userContext()).vocational.exportCsv({ password: "contraseña-incorrecta" })).rejects.toBeTruthy();
 
-    const exported = await appRouter.createCaller(publicContext()).vocational.exportCsv({ password: configuredPassword! });
+    await expect(appRouter.createCaller(publicContext()).vocational.exportCsv()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(appRouter.createCaller(viewerContext()).vocational.exportCsv()).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const exported = await appRouter.createCaller(adminContext()).vocational.exportCsv();
     const headerLine = exported.content.replace(/^\uFEFF/, "").split("\n")[0];
     const firstDataLine = exported.content.replace(/^\uFEFF/, "").split("\n")[1];
     const headers = headerLine.split(";").map((header) => header.replace(/^"|"$/g, ""));

@@ -10,11 +10,10 @@ import { ANSWER_CONFIRMATION_MS, QUESTION_EXIT_MS, type AnswerTransitionState } 
 import { appendAnswer, resolveQuestionTransition } from "../lib/questionFlow";
 import {
   ArrowLeft, ArrowRight, Award, BarChart3, Check, ChevronRight, GraduationCap,
-  Download, FileText, HeartPulse, Lightbulb, MapPin, QrCode, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Users,
+  Download, FileText, Lightbulb, MapPin, QrCode, RefreshCw, ShieldCheck, Sparkles,
 } from "lucide-react";
 import QRCode from "qrcode";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
 type Sex = "Femenino" | "Masculino" | "Otro / Prefiero no decir";
@@ -25,7 +24,6 @@ const sexOptions: Sex[] = ["Femenino", "Masculino", "Otro / Prefiero no decir"];
 const localityOptions = ["San Salvador de Jujuy", "Palpalá", "Perico", "El Carmen", "Libertador General San Martín", "Humahuaca / Quebrada", "Otra localidad de Jujuy", "Otra provincia o país", "Prefiero no indicarla"];
 const educationOptions = ["Secundario: 4.º o 5.º año", "Secundario: último año", "Egresé del secundario", "Estudio o trabajo actualmente", "Otra situación educativa"];
 const emptyParticipantProfile: ParticipantProfile = { firstName: "", lastName: "", age: "", sex: "", locality: "", educationStatus: "", dataConsent: false };
-const chartColors = ["#fb6e4b", "#406bff", "#10a979", "#f1a429", "#c94d8c"];
 
 function splitName(name: string) {
   const parts = name.replace("TS en ", "").split(" ");
@@ -35,7 +33,6 @@ function splitName(name: string) {
 export default function Home() {
   const sharedProgram = new URLSearchParams(window.location.search).get("resultado");
   if (sharedProgram && ALL_PROGRAMS[sharedProgram]) return <SharedResultLanding programName={sharedProgram} profile={ALL_PROGRAMS[sharedProgram]} />;
-  const [view, setView] = useState<"test" | "dashboard">(() => new URLSearchParams(window.location.search).get("view") === "dashboard" ? "dashboard" : "test");
   const [stage, setStage] = useState<Stage>("register");
   const [profile, setProfile] = useState<ParticipantProfile>(emptyParticipantProfile);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -45,7 +42,7 @@ export default function Home() {
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [answerTransition, setAnswerTransition] = useState<AnswerTransitionState>("idle");
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const utils = trpc.useUtils();
+
   const submit = trpc.vocational.submit.useMutation({
     onSuccess: (data) => {
       setResult({ winner: data.winner, topThree: data.topThree });
@@ -53,8 +50,7 @@ export default function Home() {
       setIsAdvancing(false);
       setAnswerTransition("idle");
       setSelectedAnswer(null);
-      utils.vocational.analytics.invalidate();
-      toast.success("Resultado guardado para la analítica del stand");
+      toast.success("Resultado guardado con éxito.");
     },
     onError: (error) => {
       setIsAdvancing(false);
@@ -65,18 +61,6 @@ export default function Home() {
         : error.data?.code === "FORBIDDEN"
           ? "La participación de esta versión histórica finalizó."
         : "No se pudo guardar el resultado. Revisá la conexión e intentá de nuevo.");
-    },
-  });
-  const analytics = trpc.vocational.analytics.useQuery(undefined, { enabled: view === "dashboard", refetchInterval: view === "dashboard" ? 10_000 : false });
-  const exportCsv = trpc.vocational.exportCsv.useMutation();
-  const createResetChallenge = trpc.vocational.createResetChallenge.useMutation();
-  const resetResults = trpc.vocational.reset.useMutation({
-    onSuccess: ({ deleted }) => {
-      utils.vocational.analytics.invalidate();
-      toast.success(`${deleted} resultado${deleted === 1 ? "" : "s"} eliminado${deleted === 1 ? "" : "s"}. El panel quedó en cero.`);
-    },
-    onError: (error) => {
-      toast.error(error.data?.code === "UNAUTHORIZED" ? "La contraseña no es válida. No se modificó ningún dato." : "No se pudieron reiniciar los resultados.");
     },
   });
 
@@ -146,87 +130,101 @@ export default function Home() {
     setSelectedAnswer(null);
   };
 
-  const saveCsvFile = (data: { content: string; filename: string }) => {
-    const blob = new Blob([data.content], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = data.filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const requestReset = async () => {
-    const firstConfirmation = window.confirm("Primera confirmación: ¿querés eliminar TODOS los resultados acumulados del panel?");
-    if (!firstConfirmation) return;
-    const password = window.prompt("Ingresá la contraseña privada para reiniciar las métricas:");
-    if (!password) return;
-    try {
-      const backup = await exportCsv.mutateAsync({ password });
-      saveCsvFile(backup);
-      toast.success("Se descargó una copia de seguridad obligatoria antes del reinicio.");
-      const { challenge } = await createResetChallenge.mutateAsync();
-      const secondConfirmation = window.confirm("Segunda confirmación: la copia ya se descargó y esta acción no se puede deshacer. ¿Confirmás el reinicio definitivo?");
-      if (secondConfirmation) resetResults.mutate({ challenge, password, backupReceipt: backup.backupReceipt });
-    } catch {
-      toast.error("No se pudo generar la copia de seguridad. No se modificó ningún resultado.");
-    }
-  };
-
-  const downloadCompleteCsv = async () => {
-    const password = window.prompt("Ingresá la contraseña privada para descargar el CSV completo:");
-    if (!password) return;
-    let data: { content: string; filename: string };
-    try {
-      data = await exportCsv.mutateAsync({ password });
-    } catch {
-      toast.error("No se pudo preparar el CSV. Intentá nuevamente.");
-      return;
-    }
-    saveCsvFile(data);
-    toast.success("Se descargó el CSV completo para coordinación.");
-  };
-
   return (
     <div className="min-h-screen overflow-hidden bg-[#edf6fc] text-[#102d54]">
-      <Header view={view} setView={setView} onTestClick={() => { setView("test"); }} />
+      <Header onTestClick={resetTest} />
       <main className="relative mx-auto min-h-[calc(100vh-78px)] max-w-7xl px-4 pb-12 pt-6 sm:px-6 lg:px-8">
         <div className="pointer-events-none absolute -left-32 top-12 h-72 w-72 rounded-full bg-[#75cff7]/30 blur-3xl" />
         <div className="pointer-events-none absolute -right-24 top-72 h-72 w-72 rounded-full bg-[#639ee8]/20 blur-3xl" />
-        {view === "test" ? (
-          <section className="relative mx-auto max-w-3xl">
-            {HISTORICAL_ARCHIVE.enabled ? <HistoricalLanding onDashboard={() => setView("dashboard")} /> : <>
-              {stage === "register" && <Registration profile={profile} setProfile={setProfile} errors={errors} onStart={startTest} />}
-              {stage === "test" && currentQuestion && <QuestionStep key={currentQuestion.id} questionIndex={displayQuestionIndex} question={currentQuestion} transitionState={answerTransition} selectedAnswer={selectedAnswer} onChoose={chooseAnswer} onBack={() => { if (answerTransition !== "idle") return; if (!answers.length) setStage("register"); else { setAnswers((current) => current.slice(0, -1)); setDisplayQuestionIndex((current) => Math.max(0, current - 1)); } }} />}
-              {stage === "result" && result && winnerProfile && <ResultStep name={displayName} participant={{ age: Number(profile.age) }} result={result} profile={winnerProfile} onReset={resetTest} onDashboard={() => setView("dashboard")} />}
-            </>}
-          </section>
-        ) : (
-          <Dashboard analytics={analytics.data} loading={analytics.isLoading} refreshing={analytics.isFetching} onReset={requestReset} resetBusy={resetResults.isPending || createResetChallenge.isPending} exporting={exportCsv.isPending} onExport={downloadCompleteCsv} archived={HISTORICAL_ARCHIVE.enabled} />
-        )}
+        <section className="relative mx-auto max-w-3xl">
+          {HISTORICAL_ARCHIVE.enabled ? <HistoricalLanding /> : <>
+            {stage === "register" && <Registration profile={profile} setProfile={setProfile} errors={errors} onStart={startTest} />}
+            {stage === "test" && currentQuestion && <QuestionStep key={currentQuestion.id} questionIndex={displayQuestionIndex} question={currentQuestion} transitionState={answerTransition} selectedAnswer={selectedAnswer} onChoose={chooseAnswer} onBack={() => { if (answerTransition !== "idle") return; if (!answers.length) setStage("register"); else { setAnswers((current) => current.slice(0, -1)); setDisplayQuestionIndex((current) => Math.max(0, current - 1)); } }} />}
+            {stage === "result" && result && winnerProfile && <ResultStep name={displayName} participant={{ age: Number(profile.age) }} result={result} profile={winnerProfile} onReset={resetTest} />}
+          </>}
+        </section>
       </main>
       <InstitutionalFooter />
     </div>
   );
 }
 
-function HistoricalLanding({ onDashboard }: { onDashboard: () => void }) {
-  return <div className="animate-rise mx-auto max-w-3xl py-8 sm:py-14"><div className="overflow-hidden rounded-[2rem] border border-[#bfe8ff] bg-white shadow-[0_18px_50px_rgba(21,92,150,0.14)]"><div className="bg-[#102d54] px-7 py-9 text-white sm:px-10"><p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[#bfe8ff]"><ShieldCheck size={14} /> Archivo histórico cerrado</p><h1 className="mt-5 font-display text-4xl font-black tracking-[-0.05em] sm:text-5xl">Una experiencia que <span className="text-[#75cff7]">dejó huella.</span></h1><p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#dff3ff]">El Test Vocacional del IES N.° 11 fue realizado durante la Expo Educativa 2026. Esta versión conserva el trabajo, sus resultados agregados y la historia del proyecto.</p></div><div className="p-7 sm:p-10"><div className="grid gap-4 sm:grid-cols-3"><div className="rounded-2xl bg-[#f5fbff] p-4"><Award className="text-[#1976b7]" size={22} /><p className="mt-3 font-display font-extrabold">Experiencia finalizada</p><p className="mt-1 text-sm text-[#526064]">La participación pública ya concluyó.</p></div><div className="rounded-2xl bg-[#f5fbff] p-4"><BarChart3 className="text-[#1976b7]" size={22} /><p className="mt-3 font-display font-extrabold">Resultados preservados</p><p className="mt-1 text-sm text-[#526064]">Las estadísticas se mantienen en lectura.</p></div><div className="rounded-2xl bg-[#f5fbff] p-4"><GraduationCap className="text-[#1976b7]" size={22} /><p className="mt-3 font-display font-extrabold">Proyecto del IES N.° 11</p><p className="mt-1 text-sm text-[#526064]">Desarrollado por estudiantes de Ciencia de Datos e IA.</p></div></div><button onClick={onDashboard} className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-4 font-display text-lg font-extrabold text-white shadow-[0_5px_0_#155c96] transition hover:-translate-y-0.5"><BarChart3 size={20} /> Ver estadísticas finales</button><p className="mt-5 text-center text-sm leading-relaxed text-[#526064]">El cuestionario y el reinicio de resultados están bloqueados para preservar esta versión histórica.</p></div></div></div>;
+function HistoricalLanding() {
+  return (
+    <div className="animate-rise mx-auto max-w-3xl py-8 sm:py-14">
+      <div className="overflow-hidden rounded-[2rem] border border-[#bfe8ff] bg-white shadow-[0_18px_50px_rgba(21,92,150,0.14)]">
+        <div className="bg-[#102d54] px-7 py-9 text-white sm:px-10">
+          <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[#bfe8ff]">
+            <ShieldCheck size={14} /> Archivo histórico cerrado
+          </p>
+          <h1 className="mt-5 font-display text-4xl font-black tracking-[-0.05em] sm:text-5xl">
+            Una experiencia que <span className="text-[#75cff7]">dejó huella.</span>
+          </h1>
+          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#dff3ff]">
+            El Test Vocacional del IES N.° 11 fue realizado durante la Expo Educativa 2026. Esta versión conserva el trabajo, sus resultados agregados y la historia del proyecto.
+          </p>
+        </div>
+        <div className="p-7 sm:p-10">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl bg-[#f5fbff] p-4">
+              <Award className="text-[#1976b7]" size={22} />
+              <p className="mt-3 font-display font-extrabold">Experiencia finalizada</p>
+              <p className="mt-1 text-sm text-[#526064]">La participación pública ya concluyó.</p>
+            </div>
+            <div className="rounded-2xl bg-[#f5fbff] p-4">
+              <BarChart3 className="text-[#1976b7]" size={22} />
+              <p className="mt-3 font-display font-extrabold">Resultados preservados</p>
+              <p className="mt-1 text-sm text-[#526064]">Las estadísticas se mantienen en lectura institucional.</p>
+            </div>
+            <div className="rounded-2xl bg-[#f5fbff] p-4">
+              <GraduationCap className="text-[#1976b7]" size={22} />
+              <p className="mt-3 font-display font-extrabold">Proyecto del IES N.° 11</p>
+              <p className="mt-1 text-sm text-[#526064]">Desarrollado por estudiantes de Ciencia de Datos e IA.</p>
+            </div>
+          </div>
+          <a
+            href="/admin"
+            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-4 font-display text-lg font-extrabold text-white shadow-[0_5px_0_#155c96] transition hover:-translate-y-0.5"
+          >
+            <BarChart3 size={20} /> Acceder al panel de estadísticas
+          </a>
+          <p className="mt-5 text-center text-sm leading-relaxed text-[#526064]">
+            El cuestionario y el reinicio de resultados están bloqueados para preservar esta versión histórica.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function Header({ view, setView, onTestClick }: { view: "test" | "dashboard"; setView: (value: "test" | "dashboard") => void; onTestClick: () => void }) {
-  return <header className="sticky top-0 z-30 border-b border-[#bfe8ff] bg-[#edf6fc]/90 backdrop-blur-xl">
-    <div className="mx-auto flex h-[78px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-      <button onClick={onTestClick} className="group flex items-center gap-3 text-left" aria-label="Ir al inicio del test">
-        <img src="/logo-ies11-jujuy.jpg" alt="Logo institucional IES N.° 11 Jujuy" className="h-12 w-12 rounded-2xl border-2 border-[#4db5ed] object-cover shadow-[0_6px_0_#155c96] transition-transform duration-150 group-active:translate-y-0.5" />
-        <div className="leading-tight"><p className="text-[11px] font-extrabold uppercase tracking-[0.19em] text-[#1976b7]">{HISTORICAL_ARCHIVE.enabled ? "Archivo histórico · Expo Educativa 2026" : "Expo Educativa 2026"}</p><p className="font-display text-lg font-extrabold tracking-tight">IES N.° 11 · Jujuy</p></div>
-      </button>
-      <nav className="flex rounded-2xl border border-[#172124]/10 bg-white/75 p-1 text-sm font-bold shadow-sm">
-        <button onClick={() => setView("test")} className={`rounded-xl px-3 py-2 transition-all sm:px-4 ${view === "test" ? "bg-[#172124] text-white shadow-md" : "text-[#687577] hover:text-[#172124]"}`}>{HISTORICAL_ARCHIVE.enabled ? "Archivo" : "Mi test"}</button>
-        <button onClick={() => setView("dashboard")} className={`rounded-xl px-3 py-2 transition-all sm:px-4 ${view === "dashboard" ? "bg-[#172124] text-white shadow-md" : "text-[#687577] hover:text-[#172124]"}`}>{HISTORICAL_ARCHIVE.enabled ? "Estadísticas" : "Panel"}</button>
-      </nav>
-    </div>
-  </header>;
+function Header({ onTestClick }: { onTestClick: () => void }) {
+  return (
+    <header className="sticky top-0 z-30 border-b border-[#bfe8ff] bg-[#edf6fc]/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-[78px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <button onClick={onTestClick} className="group flex items-center gap-3 text-left" aria-label="Ir al inicio del test">
+          <img
+            src="/logo-ies11-jujuy.jpg"
+            alt="Logo institucional IES N.° 11 Jujuy"
+            className="h-12 w-12 rounded-2xl border-2 border-[#4db5ed] object-cover shadow-[0_6px_0_#155c96] transition-transform duration-150 group-active:translate-y-0.5"
+          />
+          <div className="leading-tight">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.19em] text-[#1976b7]">
+              {HISTORICAL_ARCHIVE.enabled ? "Archivo histórico · Expo Educativa 2026" : "Expo Educativa 2026"}
+            </p>
+            <p className="font-display text-lg font-extrabold tracking-tight">IES N.° 11 · Jujuy</p>
+          </div>
+        </button>
+        <nav className="flex items-center gap-3">
+          <a
+            href="/admin"
+            className="inline-flex items-center gap-2 rounded-xl border border-[#1976b7]/25 bg-white/80 px-3.5 py-2 text-xs font-bold text-[#155f98] shadow-sm transition hover:bg-white hover:text-[#102d54] sm:px-4 sm:text-sm"
+          >
+            Acceso institucional
+          </a>
+        </nav>
+      </div>
+    </header>
+  );
 }
 
 function Registration({ profile, setProfile, errors, onStart }: { profile: ParticipantProfile; setProfile: React.Dispatch<React.SetStateAction<ParticipantProfile>>; errors: Record<string, string>; onStart: () => void }) {
@@ -239,7 +237,7 @@ function Registration({ profile, setProfile, errors, onStart }: { profile: Parti
         <Field label="Edad" error={errors.age}><input className={`${inputClass} ${errors.age ? "border-[#e45542]" : "border-[#dbe0df]"}`} value={profile.age} onChange={(e) => setProfile((p) => ({ ...p, age: e.target.value.replace(/\D/g, "").slice(0, 2) }))} placeholder="Ej. 17" inputMode="numeric" /></Field>
         <Field label="Sexo" error={errors.sex}><div className="mt-2 grid gap-2"><div className="flex flex-wrap gap-2">{sexOptions.map((option) => <button type="button" key={option} onClick={() => setProfile((p) => ({ ...p, sex: option }))} className={`rounded-xl border px-3 py-2 text-sm font-bold transition-all ${profile.sex === option ? "border-[#172124] bg-[#172124] text-white" : "border-[#dbe0df] bg-white text-[#526064] hover:border-[#172124]/40"}`}>{option}</button>)}</div></div></Field>
         <div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Localidad" error={errors.locality}><select className={`${inputClass} ${errors.locality ? "border-[#e45542]" : "border-[#dbe0df]"}`} value={profile.locality} onChange={(e) => setProfile((p) => ({ ...p, locality: e.target.value }))}><option value="">Seleccioná una opción</option>{localityOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field><Field label="Situación educativa" error={errors.educationStatus}><select className={`${inputClass} ${errors.educationStatus ? "border-[#e45542]" : "border-[#dbe0df]"}`} value={profile.educationStatus} onChange={(e) => setProfile((p) => ({ ...p, educationStatus: e.target.value }))}><option value="">Seleccioná una opción</option>{educationOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field></div>
-        <div className={`consent-notice mt-5 rounded-2xl border p-4 ${errors.dataConsent ? "border-[#e45542] bg-[#fff4f1]" : "border-[#bfe8ff] bg-[#f5fbff]"}`}><label className="flex cursor-pointer gap-3"><input type="checkbox" checked={profile.dataConsent} onChange={(e) => setProfile((p) => ({ ...p, dataConsent: e.target.checked }))} className="mt-1 h-5 w-5 shrink-0 accent-[#1976b7]" /><span className="text-sm leading-relaxed text-[#405f73]"><strong className="text-[#102d54]">Autorizo el uso institucional de mis datos.</strong> El IES N.° 11 guardará mi nombre, apellido y respuestas en una base protegida. La página pública solo muestra estadísticas agrupadas; la descarga completa requiere la contraseña de coordinación.</span></label>{errors.dataConsent && <span className="mt-2 block text-xs font-medium text-[#d84736]">{errors.dataConsent}</span>}</div>
+        <div className={`consent-notice mt-5 rounded-2xl border p-4 ${errors.dataConsent ? "border-[#e45542] bg-[#fff4f1]" : "border-[#bfe8ff] bg-[#f5fbff]"}`}><label className="flex cursor-pointer gap-3"><input type="checkbox" checked={profile.dataConsent} onChange={(e) => setProfile((p) => ({ ...p, dataConsent: e.target.checked }))} className="mt-1 h-5 w-5 shrink-0 accent-[#1976b7]" /><span className="text-sm leading-relaxed text-[#405f73]"><strong className="text-[#102d54]">Autorizo el uso institucional de mis datos.</strong> El IES N.° 11 guardará mi nombre, apellido y respuestas en una base protegida para orientación y analítica agregada.</span></label>{errors.dataConsent && <span className="mt-2 block text-xs font-medium text-[#d84736]">{errors.dataConsent}</span>}</div>
         <button onClick={onStart} className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-4 font-display text-lg font-extrabold text-white shadow-[0_5px_0_#155c96] transition duration-150 hover:-translate-y-0.5 hover:bg-[#155f98] active:translate-y-1 active:shadow-none">Comenzar mi test <ArrowRight size={20} /></button><p className="mt-3 text-center text-xs leading-relaxed text-[#687577]">Tus datos identificatorios se resguardan para uso institucional. El panel público nunca los muestra.</p>
       </div>
     </div>
@@ -278,7 +276,7 @@ function QuestionStep({ questionIndex, question, transitionState, selectedAnswer
   return <div className={`question-step ${transitionState === "selected" ? "question-step-answering" : ""} ${transitionState === "leaving" ? "question-step-leaving" : ""}`}><div className="mb-5 flex items-center justify-between"><button onClick={onBack} disabled={isLocked} className="inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-bold text-[#566366] transition hover:bg-white disabled:opacity-50"><ArrowLeft size={18} /> Atrás</button><p className="font-display text-sm font-extrabold text-[#526064]" aria-live="polite">Pregunta <span className="text-[#1976b7]">{questionIndex + 1}</span> de {QUESTIONS.length}</p></div><div className="mb-8 rounded-2xl border border-[#cfe8f8] bg-white/75 p-3.5 shadow-sm"><div className="mb-2.5 flex items-center justify-between text-xs font-extrabold uppercase tracking-[0.12em] text-[#526064]"><span>Tu avance</span><span className="text-[#1976b7]">{Math.round(pct)}% completado</span></div><div className="h-3 overflow-hidden rounded-full bg-[#dcebf6]" role="progressbar" aria-label="Progreso del test" aria-valuemin={0} aria-valuemax={QUESTIONS.length} aria-valuenow={questionIndex + 1} aria-valuetext={`Pregunta ${questionIndex + 1} de ${QUESTIONS.length}`}><div className="progress-fill h-full rounded-full bg-gradient-to-r from-[#155f98] via-[#1976b7] to-[#4db5ed]" style={{ width: `${pct}%` }} /></div><div className="mt-3 grid grid-cols-12 gap-1.5" aria-hidden="true">{QUESTIONS.map((item, index) => <span key={item.id} className={`h-1.5 rounded-full transition-colors duration-300 ${index < questionIndex ? "bg-[#155f98]" : index === questionIndex ? "bg-[#4db5ed]" : "bg-[#dcebf6]"}`} />)}</div></div><article className="question-card overflow-hidden rounded-[2rem] bg-[#102d54] p-7 text-white shadow-[0_18px_50px_rgba(16,45,84,0.24)] sm:p-10"><div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#75cff7] font-display text-3xl font-black text-[#102d54]">{question.icon}</div><p className="mb-3 text-xs font-extrabold uppercase tracking-[0.2em] text-[#bfe8ff]">{question.institutional ? "Tu próximo paso" : modeLabel}</p><h1 className="font-display text-3xl font-black leading-tight tracking-[-0.035em] sm:text-4xl">{question.prompt}</h1><p className="mt-4 text-sm font-semibold leading-relaxed text-[#d8efff]">No hay respuestas correctas: elegí la opción que más se parece a vos.</p></article>{question.mode === "slider" ? <div className="question-options mt-5 rounded-[1.65rem] border border-[#d9e6ee] bg-white p-6 shadow-sm"><div className="mb-5 flex justify-between gap-4 text-sm font-bold text-[#526064]"><span>{question.sliderLabels?.min}</span><span>{question.sliderLabels?.max}</span></div><input aria-label="Escala de preferencia" aria-valuetext={`${sliderValue} de 10`} type="range" min="0" max="10" value={sliderValue} onChange={(event) => setSliderValue(Number(event.target.value))} className="ies-slider w-full" /><div className="mt-5 flex items-center justify-between"><span className="font-display text-3xl font-black text-[#1976b7]">{sliderValue}/10</span><button onClick={() => onChoose(sliderValue)} disabled={isLocked} className={`inline-flex items-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-3 font-display font-extrabold text-white shadow-[0_4px_0_#155c96] disabled:opacity-70 ${selectedAnswer !== null ? "answer-option-selected" : ""}`}>{selectedAnswer !== null ? <Check size={18} /> : <ArrowRight size={18} />}{selectedAnswer !== null ? "Respuesta elegida" : "Confirmar"}</button></div></div> : <div className={`question-options mt-5 grid gap-3 ${question.mode === "binary" ? "sm:grid-cols-2" : ""}`}>{question.options.map((option, index) => <button key={option.label} disabled={isLocked} onClick={() => onChoose(index)} className={`group flex min-h-[74px] items-center gap-4 rounded-2xl border border-[#d9e6ee] bg-white p-4 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-[#1976b7] hover:shadow-md active:translate-y-0 disabled:opacity-75 ${selectedAnswer === index ? "answer-option-selected" : ""}`}><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#edf7fd] font-display text-sm font-black text-[#1976b7] transition-colors group-hover:bg-[#1976b7] group-hover:text-white">{selectedAnswer === index ? <Check size={17} strokeWidth={3} /> : String.fromCharCode(65 + index)}</span><span className="flex-1 text-[15px] font-bold leading-snug text-[#334043]">{option.label}</span><ChevronRight className="shrink-0 text-[#8da6b7] group-hover:text-[#1976b7]" size={19} /></button>)}</div>}</div>;
 }
 
-function ResultStep({ name, participant, result, profile, onReset, onDashboard }: { name: string; participant: { age: number }; result: { winner: { program: string; score: number; area: string }; topThree: { program: string; score: number; area: string }[] }; profile: typeof PROGRAMS[string]; onReset: () => void; onDashboard: () => void }) {
+function ResultStep({ name, participant, result, profile, onReset }: { name: string; participant: { age: number }; result: { winner: { program: string; score: number; area: string }; topThree: { program: string; score: number; area: string }[] }; profile: typeof PROGRAMS[string]; onReset: () => void }) {
   const meta = AREA_META[result.winner.area as keyof typeof AREA_META];
   const topMax = Math.max(...result.topThree.map((item) => item.score));
   const comparisonRows = buildTopAffinityComparison(result.topThree);
@@ -312,7 +310,7 @@ function ResultStep({ name, participant, result, profile, onReset, onDashboard }
     <div className="animate-rise">
       <div className="mb-5 flex items-center justify-between">
         <span className="inline-flex items-center gap-2 rounded-full bg-[#dff7ef] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[#08714d]"><Check size={14} strokeWidth={3} /> Test completado</span>
-        <button onClick={onDashboard} className="text-sm font-bold text-[#406bff] hover:underline">Ver panel</button>
+        <a href="/admin" className="text-sm font-bold text-[#406bff] hover:underline">Panel institucional</a>
       </div>
       <section className="result-reveal result-reveal-premium relative overflow-hidden rounded-[2rem] bg-[#102d54] px-7 py-9 text-white shadow-[0_22px_60px_rgba(16,45,84,0.28)] sm:px-10">
         <div className="result-rays" /><div className="result-orbit result-orbit-one" /><div className="result-orbit result-orbit-two" />
@@ -348,7 +346,7 @@ function ResultStep({ name, participant, result, profile, onReset, onDashboard }
         </section>
       )}
       <section className="mt-5 overflow-hidden rounded-[1.65rem] border border-[#d8ecfb] bg-[#f5fbff] p-5 shadow-sm"><div className="flex flex-col gap-5 sm:flex-row sm:items-center"><div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[#bfe8ff] bg-white p-2">{shareQr ? <img src={shareQr} alt="Código QR para abrir la tarjeta de resultado en el celular" className="h-full w-full" /> : <QrCode className="text-[#1976b7]" size={40} />}</div><div><p className="font-display text-lg font-extrabold text-[#102d54]">Llevá tu resultado al celular</p><p className="mt-1 text-sm leading-relaxed text-[#526064]">Escaneá este QR para abrir una tarjeta de tu tecnicatura recomendada y descargarla para compartir en redes.</p></div></div></section>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2"><button onClick={handlePdf} disabled={isGeneratingPdf} className="flex items-center justify-center gap-2 rounded-2xl bg-[#102d54] px-5 py-3.5 font-display font-extrabold text-white shadow-[0_4px_0_#071a33] transition hover:-translate-y-0.5 disabled:opacity-60"><FileText size={18} /> {isGeneratingPdf ? "Generando informe…" : "Descargar informe PDF"}</button><button onClick={downloadShareImage} disabled={isGeneratingImage} className="flex items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-3.5 font-display font-extrabold text-white shadow-[0_4px_0_#155c96] transition hover:-translate-y-0.5 disabled:opacity-60"><Download size={18} /> {isGeneratingImage ? "Creando tarjeta…" : "Descargar tarjeta para redes"}</button><button onClick={onDashboard} className="flex items-center justify-center gap-2 rounded-2xl border border-[#1976b7]/20 bg-white px-5 py-3.5 font-display font-extrabold text-[#155f98] transition hover:border-[#1976b7]"><BarChart3 size={18} /> Ver analítica del stand</button><button onClick={onReset} className="flex items-center justify-center gap-2 rounded-2xl border border-[#102d54]/15 bg-white px-5 py-3.5 font-display font-extrabold text-[#102d54] transition hover:border-[#102d54] active:scale-[.98]"><RefreshCw size={18} /> Hacer otro test</button></div>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2"><button onClick={handlePdf} disabled={isGeneratingPdf} className="flex items-center justify-center gap-2 rounded-2xl bg-[#102d54] px-5 py-3.5 font-display font-extrabold text-white shadow-[0_4px_0_#071a33] transition hover:-translate-y-0.5 disabled:opacity-60"><FileText size={18} /> {isGeneratingPdf ? "Generando informe…" : "Descargar informe PDF"}</button><button onClick={downloadShareImage} disabled={isGeneratingImage} className="flex items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-3.5 font-display font-extrabold text-white shadow-[0_4px_0_#155c96] transition hover:-translate-y-0.5 disabled:opacity-60"><Download size={18} /> {isGeneratingImage ? "Creando tarjeta…" : "Descargar tarjeta para redes"}</button><a href="/admin" className="flex items-center justify-center gap-2 rounded-2xl border border-[#1976b7]/20 bg-white px-5 py-3.5 font-display font-extrabold text-[#155f98] transition hover:border-[#1976b7]"><BarChart3 size={18} /> Acceso institucional</a><button onClick={onReset} className="flex items-center justify-center gap-2 rounded-2xl border border-[#102d54]/15 bg-white px-5 py-3.5 font-display font-extrabold text-[#102d54] transition hover:border-[#102d54] active:scale-[.98]"><RefreshCw size={18} /> Hacer otro test</button></div>
       <div className="pointer-events-none fixed left-[-10000px] top-0"><SocialResultCard ref={shareCardRef} programName={result.winner.program} profile={profile} name={name} /></div>
     </div>
   );
@@ -376,52 +374,7 @@ function SharedResultLanding({ programName, profile }: { programName: string; pr
       toast.success("La tarjeta se descargó correctamente.");
     } catch { toast.error("No se pudo descargar la tarjeta. Intentá nuevamente."); } finally { setDownloading(false); }
   };
-  return <main className="min-h-screen bg-[#eaf6ff] px-4 py-8 sm:py-12"><div className="mx-auto max-w-md"><p className="mb-4 text-center text-sm font-extrabold uppercase tracking-[0.12em] text-[#155f98]">Tu resultado vocacional</p><div className="mx-auto h-[446px] w-full max-w-[400px] overflow-hidden rounded-[2rem] shadow-[0_18px_50px_rgba(16,45,84,0.2)] sm:h-[500px]"><div className="h-[1350px] w-[1080px] origin-top-left scale-[.33] sm:scale-[.37]"><SocialResultCard ref={cardRef} programName={programName} profile={profile} /></div></div><button onClick={downloadCard} disabled={downloading} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-4 font-display text-lg font-extrabold text-white shadow-[0_5px_0_#155c96] transition hover:-translate-y-0.5 disabled:opacity-60"><Download size={20} /> {downloading ? "Creando tarjeta…" : "Descargar mi tarjeta"}</button><a href="/" className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#1976b7]/20 bg-white px-5 py-4 font-display font-extrabold text-[#155f98]">Volver al archivo histórico</a></div></main>;
+  return <main className="min-h-screen bg-[#eaf6ff] px-4 py-8 sm:py-12"><div className="mx-auto max-w-md"><p className="mb-4 text-center text-sm font-extrabold uppercase tracking-[0.12em] text-[#155f98]">Tu resultado vocacional</p><div className="mx-auto h-[446px] w-full max-w-[400px] overflow-hidden rounded-[2rem] shadow-[0_18px_50px_rgba(16,45,84,0.2)] sm:h-[500px]"><div className="h-[1350px] w-[1080px] origin-top-left scale-[.33] sm:scale-[.37]"><SocialResultCard ref={cardRef} programName={programName} profile={profile} /></div></div><button onClick={downloadCard} disabled={downloading} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-4 font-display text-lg font-extrabold text-white shadow-[0_5px_0_#155c96] transition hover:-translate-y-0.5 disabled:opacity-60"><Download size={20} /> {downloading ? "Creando tarjeta…" : "Descargar mi tarjeta"}</button><a href="/" className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#1976b7]/20 bg-white px-5 py-4 font-display font-extrabold text-[#155f98]">Volver al inicio</a></div></main>;
 }
 
-function Dashboard({ analytics, loading, refreshing, onReset, resetBusy, exporting, onExport, archived }: { analytics: any; loading: boolean; refreshing: boolean; onReset: () => void; resetBusy: boolean; exporting: boolean; onExport: () => void; archived: boolean }) {
-  const catalogViews = analytics?.catalogViews ?? [];
-  const [selectedCatalogVersion, setSelectedCatalogVersion] = useState<string | null>(null);
-  const defaultCatalogView = catalogViews.find((view: any) => view.version === "2026.08-oficial-18" && view.total > 0) ?? catalogViews.find((view: any) => view.version === "2026.08-legado-19") ?? catalogViews[0];
-  const analyticsView = catalogViews.find((view: any) => view.version === selectedCatalogVersion) ?? defaultCatalogView ?? analytics;
-  const isConsolidatedCatalogView = analyticsView?.isConsolidated === true;
-  const ranking = analyticsView?.ranking ?? [];
-  const areaData = analyticsView?.areaDistribution ?? [];
-  const hasSafeDemographicSample = (analyticsView?.total ?? 0) >= 5;
-  const ageData = hasSafeDemographicSample ? analyticsView?.ageDistribution ?? [] : [];
-  const sexData = hasSafeDemographicSample ? analyticsView?.sexDistribution ?? [] : [];
-  const localityData = hasSafeDemographicSample ? analyticsView?.localityDistribution ?? [] : [];
-  const educationData = hasSafeDemographicSample ? analyticsView?.educationDistribution ?? [] : [];
-  const topProgram = analyticsView?.topProgram;
-  const visibleRanking = ranking.map((item: { program: string; count: number }) => ({ ...item, short: splitName(item.program) }));
-  const visibleTopThreeRanking = (analyticsView?.topThreeRanking ?? []).map((item: { program: string; count: number; first: number; second: number; third: number }) => ({ ...item, short: splitName(item.program) }));
-  const displayTop = topProgram?.count ? splitName(topProgram.program) : "Aún sin datos";
-  const exportLabel = exporting ? "Preparando CSV…" : "Exportar CSV completo";
-
-  return <section className="animate-rise relative">
-    <div className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div><p className="mb-2 inline-flex items-center gap-2 rounded-full bg-[#e7ecff] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[#3155d4]"><BarChart3 size={14} /> {archived ? "Archivo histórico" : `En vivo ${refreshing ? "· Actualizando" : ""}`}</p><h1 className="font-display text-4xl font-black tracking-[-0.05em] sm:text-5xl">{archived ? <>Resultados de la <span className="text-[#c55337]">Expo.</span></> : <>Pulso del <span className="text-[#c55337]">stand.</span></>}</h1><p className="mt-2 text-[#526064]">{archived ? "Resultados finales agrupados de la Expo Educativa 2026, sin información identificatoria." : "Datos agrupados de la Expo Educativa 2026, sin información identificatoria."}</p></div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <button onClick={onExport} disabled={exporting} title="Solicita la contraseña privada de coordinación" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1976b7]/25 bg-white px-4 py-3.5 font-display font-extrabold text-[#155f98] transition hover:bg-[#f5fbff] disabled:opacity-60"><Download size={18} /> {exportLabel}</button>
-        {!archived && <button onClick={onReset} disabled={resetBusy} title="Solicita dos confirmaciones antes de eliminar todos los resultados" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#d84736] bg-white px-4 py-3.5 font-display font-extrabold text-[#c55337] transition hover:bg-[#fff0eb] disabled:opacity-50"><RotateCcw size={18} /> {resetBusy ? "Reiniciando…" : "Reiniciar resultados"}</button>}
-      </div>
-    </div>
-    <div className="mb-5 flex gap-3 rounded-2xl border border-[#bfe8ff] bg-white/80 p-3.5 text-sm leading-relaxed text-[#405f73]"><ShieldCheck className="mt-0.5 shrink-0 text-[#1976b7]" size={18} /><p>{archived ? "Esta es una versión histórica cerrada: los resultados se conservan en lectura y el reinicio está bloqueado. El CSV completo sigue protegido por contraseña privada de coordinación." : "El CSV completo contiene datos identificatorios. La descarga y el reinicio solicitan la contraseña privada de coordinación del IES N.° 11."}</p></div>
-    {loading ? <DashboardSkeleton /> : <>
-      <div className="mb-5 rounded-2xl border border-[#d8ecfb] bg-[#f8fcff] p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#1976b7]">Serie analítica</p><p className="mt-1 font-bold text-[#102d54]">{analyticsView?.label ?? "Catálogo de tecnicaturas"}</p><p className="mt-1 text-xs leading-relaxed text-[#526064]">{isConsolidatedCatalogView ? "Esta vista suma resultados de ambos catálogos para una lectura histórica global." : "Cada serie conserva su catálogo original; no se mezclan afinidades calculadas con 19 y 18 tecnicaturas."}</p></div>{catalogViews.length > 1 && <select aria-label="Seleccionar versión de catálogo" value={selectedCatalogVersion ?? analyticsView?.version ?? ""} onChange={(event) => setSelectedCatalogVersion(event.target.value)} className="rounded-xl border border-[#bfe8ff] bg-white px-3 py-2 text-sm font-bold text-[#155f98] outline-none focus:ring-4 focus:ring-[#1976b7]/15">{catalogViews.map((view: any) => <option key={view.version} value={view.version}>{view.label} · {view.total} casos</option>)}</select>}</div>{isConsolidatedCatalogView && <div className="mt-3 flex gap-2 rounded-xl border border-[#f2d5a5] bg-[#fff9ec] px-3 py-2 text-xs leading-relaxed text-[#745218]"><ShieldCheck className="mt-0.5 shrink-0" size={15} /><p><strong>Lectura histórica:</strong> incluye las evaluaciones de las dos versiones. El perfil legado <em>Museología y Gestión Patrimonial</em> se conserva solo para interpretar registros anteriores y no integra la oferta oficial vigente de 18 tecnicaturas.</p></div>}</div>
-      <div className="grid gap-4 sm:grid-cols-3"><Kpi label="Encuestados" value={analyticsView?.total ?? 0} icon={<Users size={20} />} tone="coral" /><Kpi label="Edad promedio" value={hasSafeDemographicSample ? `${analyticsView.averageAge} años` : "—"} icon={<HeartPulse size={20} />} tone="blue" /><Kpi label="Carrera más elegida" value={displayTop} icon={<Sparkles size={20} />} tone="green" small /></div>
-      {!analyticsView?.total ? <div className="mt-5 rounded-[2rem] border border-dashed border-[#cdd5d2] bg-white/60 p-10 text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#ffdf9c] text-[#7c5315]"><Users size={25} /></div><h2 className="mt-4 font-display text-2xl font-extrabold">Esta serie todavía no tiene resultados</h2><p className="mx-auto mt-2 max-w-md text-[#637073]">Cuando una persona complete el test con este catálogo, las estadísticas agrupadas aparecerán aquí automáticamente.</p></div> : <div className="mt-5 grid gap-5 lg:grid-cols-[1.45fr_0.9fr]"><ChartCard title={`Ranking de las ${analyticsView?.programCount ?? ranking.length} tecnicaturas`} subtitle="Resultados obtenidos por carrera dentro de esta versión" className="min-h-[690px]"><ResponsiveContainer width="100%" height={650}><BarChart data={visibleRanking} layout="vertical" margin={{ left: 4, right: 20, top: 10, bottom: 0 }}><XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="short" width={132} axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#526064" }} /><Tooltip cursor={{ fill: "#f7f4ee" }} contentStyle={{ borderRadius: 16, border: "none", boxShadow: "0 12px 28px rgba(23,33,36,.14)" }} /><Bar dataKey="count" radius={[0, 8, 8, 0]} fill="#406bff">{visibleRanking.map((item: any) => <Cell key={item.program} fill={AREA_META[item.area as keyof typeof AREA_META].color} />)}</Bar></BarChart></ResponsiveContainer></ChartCard><div className="grid gap-5"><ChartCard title="Áreas vocacionales" subtitle="Distribución de afinidades"><div className="h-[235px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={areaData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={92} paddingAngle={4}>{areaData.map((item: any) => <Cell key={item.label} fill={AREA_META[item.label as keyof typeof AREA_META]?.color ?? "#406bff"} />)}</Pie><Tooltip contentStyle={{ borderRadius: 16, border: "none" }} /></PieChart></ResponsiveContainer></div><div className="grid gap-2">{areaData.map((item: any) => <div className="flex items-center justify-between text-xs font-bold" key={item.label}><span className="flex items-center gap-2 text-[#526064]"><i className="h-2.5 w-2.5 rounded-full" style={{ background: AREA_META[item.label as keyof typeof AREA_META]?.color }} />{item.label}</span><span>{item.value}</span></div>)}</div></ChartCard><ChartCard title="Situación educativa" subtitle={hasSafeDemographicSample ? "Contexto de quienes participaron" : "Se muestra desde 5 participaciones"}><SimpleBars data={educationData} colors={["#406bff", "#10a979", "#f3a737", "#c55337"]} /></ChartCard><ChartCard title="Localidad" subtitle={hasSafeDemographicSample ? "Origen informado" : "Se muestra desde 5 participaciones"}><SimpleBars data={localityData} colors={["#1976b7", "#75cff7", "#10a979", "#f3a737"]} /></ChartCard><ChartCard title="Por sexo y edad" subtitle={hasSafeDemographicSample ? "Participación registrada" : "Se muestra desde 5 participaciones"}><SimpleBars data={[...sexData, ...ageData]} colors={chartColors} /></ChartCard></div></div>}
-      <TopThreeRankingChart data={visibleTopThreeRanking} total={analyticsView?.total ?? 0} />
-    </>}
-  </section>;
-}
-
-function Kpi({ label, value, icon, tone, small = false }: { label: string; value: string | number; icon: React.ReactNode; tone: "coral" | "blue" | "green"; small?: boolean }) { const color = tone === "coral" ? "bg-[#dff3ff] text-[#1976b7]" : tone === "blue" ? "bg-[#e7ecff] text-[#406bff]" : "bg-[#dff7ef] text-[#08714d]"; return <div className="rounded-[1.65rem] border border-white bg-white p-5 shadow-sm"><div className={`mb-6 grid h-10 w-10 place-items-center rounded-xl ${color}`}>{icon}</div><p className="text-sm font-bold text-[#637073]">{label}</p><p className={`mt-1 font-display font-black tracking-[-0.04em] text-[#172124] ${small ? "text-xl leading-tight" : "text-3xl"}`}>{value}</p></div>; }
-function ChartCard({ title, subtitle, children, className = "" }: { title: string; subtitle: string; children: React.ReactNode; className?: string }) { return <div className={`rounded-[1.65rem] border border-white bg-white p-5 shadow-sm ${className}`}><h2 className="font-display text-xl font-extrabold">{title}</h2><p className="mb-4 mt-1 text-sm text-[#748083]">{subtitle}</p>{children}</div>; }
-function SimpleBars({ data, colors }: { data: { label: string; value: number }[]; colors: string[] }) { if (!data.length) return <div className="flex min-h-20 items-center gap-3 rounded-xl bg-[#f5fbff] px-3 text-sm leading-relaxed text-[#526064]"><ShieldCheck className="shrink-0 text-[#1976b7]" size={18} />Para cuidar la privacidad, este detalle se habilita cuando participen al menos 5 personas.</div>; const max = Math.max(...data.map((item) => item.value), 1); return <div className="space-y-4 pt-2">{data.map((item, index) => <div key={item.label}><div className="mb-1.5 flex justify-between text-sm font-bold"><span className="text-[#526064]">{item.label}</span><span>{item.value}</span></div><div className="h-2.5 rounded-full bg-[#ebeeeb]"><div className="h-full rounded-full" style={{ background: colors[index % colors.length], width: `${(item.value / max) * 100}%` }} /></div></div>)}</div>; }
-function TopThreeRankingChart({ data, total }: { data: { program: string; area: string; short: string; count: number; first: number; second: number; third: number }[]; total: number }) {
-  if (!total) return null;
-  return <section className="mt-5"><ChartCard title="Presencia en las 3 afinidades principales" subtitle="Cada barra reúne las veces que una tecnicatura apareció como 1.ª, 2.ª o 3.ª opción. Son datos agregados, sin identificar participantes."><div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-bold text-[#526064]"><span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-sm bg-[#102d54]" />1.ª afinidad</span><span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-sm bg-[#1976b7]" />2.ª afinidad</span><span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-sm bg-[#75cff7]" />3.ª afinidad</span></div><div className="h-[650px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ left: 4, right: 20, top: 10, bottom: 0 }}><XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="short" width={132} axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: "#526064" }} /><Tooltip cursor={{ fill: "#f7f4ee" }} contentStyle={{ borderRadius: 16, border: "none", boxShadow: "0 12px 28px rgba(23,33,36,.14)" }} /><Bar dataKey="first" name="1.ª afinidad" stackId="top-three" fill="#102d54" /><Bar dataKey="second" name="2.ª afinidad" stackId="top-three" fill="#1976b7" /><Bar dataKey="third" name="3.ª afinidad" stackId="top-three" fill="#75cff7" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer></div></ChartCard></section>;
-}
-function DashboardSkeleton() { return <div className="grid gap-5"><div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((item) => <div className="h-44 animate-pulse rounded-[1.65rem] bg-white" key={item} />)}</div><div className="h-80 animate-pulse rounded-[1.65rem] bg-white" /></div>; }
 function InstitutionalFooter() { return <footer className="institutional-footer relative overflow-hidden border-t border-[#bfe8ff] bg-[#102d54] px-4 py-8 text-center text-white"><div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#155f98] via-[#75cff7] to-[#155f98]" /><div className="relative mx-auto flex max-w-3xl flex-col items-center gap-3"><img src="/logo-ies11-jujuy.jpg" alt="IES N.° 11 Jujuy" className="h-12 w-12 rounded-full border-2 border-[#75cff7] object-cover" /><p className="max-w-[22rem] font-display text-sm font-extrabold leading-snug tracking-tight sm:max-w-3xl sm:text-base">Hecho y desarrollado por alumnos de la carrera de Ciencias de Datos e Inteligencia Artificial del IES N.°&nbsp;11.</p><p className="text-sm font-semibold text-[#bfe8ff]">{HISTORICAL_ARCHIVE.enabled ? "Expo Educativa 2026 · Jujuy" : "San Salvador de Jujuy"}</p></div></footer>; }

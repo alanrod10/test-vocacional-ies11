@@ -8,6 +8,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { seedInitialAdminUser } from "../db";
 
 export function validateEnvironmentSecrets() {
   const jwtSecret = process.env.JWT_SECRET?.trim();
@@ -42,6 +43,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   validateEnvironmentSecrets();
+  await seedInitialAdminUser();
 
   const app = express();
   const server = createServer(app);

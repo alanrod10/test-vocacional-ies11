@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   deleteAll: vi.fn(),
   list: vi.fn(),
   recordAdminAction: vi.fn(),
+  getAdminUser: vi.fn(),
 }));
 
 vi.mock("./db", async (importOriginal) => {
@@ -15,13 +16,40 @@ vi.mock("./db", async (importOriginal) => {
     deleteAllVocationalAssessments: mocks.deleteAll,
     listVocationalAssessments: mocks.list,
     recordVocationalAdminAction: mocks.recordAdminAction,
+    getAdminUserByUsername: mocks.getAdminUser,
   };
 });
 
 import { appRouter } from "./routers";
 
-function publicContext() {
-  return { user: null, req: { protocol: "https", headers: {}, ip: "127.0.0.1" }, res: {}, clientIp: "127.0.0.1" } as TrpcContext;
+function publicContext(): TrpcContext {
+  return {
+    user: null,
+    adminUser: null,
+    req: { protocol: "https", headers: { "x-forwarded-for": "127.0.0.1" }, ip: "127.0.0.1", socket: { remoteAddress: "127.0.0.1" } } as any,
+    res: { cookie: vi.fn(), clearCookie: vi.fn() } as any,
+    clientIp: "127.0.0.1",
+  };
+}
+
+function viewerContext(): TrpcContext {
+  return {
+    user: null,
+    adminUser: { id: 2, username: "viewer", role: "viewer" },
+    req: { protocol: "https", headers: { "x-forwarded-for": "127.0.0.1" }, ip: "127.0.0.1", socket: { remoteAddress: "127.0.0.1" } } as any,
+    res: { cookie: vi.fn(), clearCookie: vi.fn() } as any,
+    clientIp: "127.0.0.1",
+  };
+}
+
+function adminContext(): TrpcContext {
+  return {
+    user: null,
+    adminUser: { id: 1, username: "admin", role: "admin" },
+    req: { protocol: "https", headers: { "x-forwarded-for": "127.0.0.1" }, ip: "127.0.0.1", socket: { remoteAddress: "127.0.0.1" } } as any,
+    res: { cookie: vi.fn(), clearCookie: vi.fn() } as any,
+    clientIp: "127.0.0.1",
+  };
 }
 
 function exampleAssessment() {
@@ -51,24 +79,35 @@ beforeEach(() => {
     return count;
   });
   mocks.recordAdminAction.mockResolvedValue(undefined);
+  mocks.getAdminUser.mockResolvedValue(null);
 });
 
-describe("reinicio protegido de resultados", () => {
-  const configuredPassword = process.env.ADMIN_ACTION_PASSWORD!;
-
+describe("reinicio protegido de resultados y control de acceso", () => {
   it("bloquea el reinicio para preservar el archivo histórico", async () => {
-    const caller = appRouter.createCaller(publicContext());
     mocks.rows = [exampleAssessment()];
-    await expect(caller.vocational.createResetChallenge()).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.vocational.reset({ challenge: "x".repeat(20), password: configuredPassword, backupReceipt: "00000000-0000-4000-8000-000000000000" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // Llamada sin autenticación -> UNAUTHORIZED
+    const publicCaller = appRouter.createCaller(publicContext());
+    await expect(publicCaller.vocational.createResetChallenge()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(publicCaller.vocational.reset({ challenge: "x".repeat(20), backupReceipt: "00000000-0000-4000-8000-000000000000" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+
+    // Llamada con rol viewer -> FORBIDDEN
+    const viewerCaller = appRouter.createCaller(viewerContext());
+    await expect(viewerCaller.vocational.createResetChallenge()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(viewerCaller.vocational.reset({ challenge: "x".repeat(20), backupReceipt: "00000000-0000-4000-8000-000000000000" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // Llamada con rol admin en modo histórico -> FORBIDDEN por archivo histórico
+    const adminCaller = appRouter.createCaller(adminContext());
+    await expect(adminCaller.vocational.createResetChallenge()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(adminCaller.vocational.reset({ challenge: "x".repeat(20), backupReceipt: "00000000-0000-4000-8000-000000000000" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mocks.deleteAll).not.toHaveBeenCalled();
   });
 
-  it("limita los intentos fallidos de contraseña para proteger las acciones administrativas", async () => {
+  it("limita los intentos fallidos de login para proteger el acceso administrativo", async () => {
     const caller = appRouter.createCaller(publicContext());
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      await expect(caller.vocational.verifyAdminPassword({ password: "contraseña-incorrecta" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+      await expect(caller.adminAuth.login({ username: "admin", password: "contraseña-incorrecta" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     }
-    await expect(caller.vocational.verifyAdminPassword({ password: "contraseña-incorrecta" })).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    await expect(caller.adminAuth.login({ username: "admin", password: "contraseña-incorrecta" })).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
   });
 });

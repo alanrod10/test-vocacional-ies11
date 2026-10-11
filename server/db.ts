@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, vocationalAdminActions, vocationalAssessments, users } from "../drizzle/schema";
+import bcrypt from "bcryptjs";
+import { AdminUser, adminUsers, InsertAdminUser, InsertUser, vocationalAdminActions, vocationalAssessments, users } from "../drizzle/schema";
 import { getOptionLabelForQuestionnaireVersion, LEGACY_PROGRAM_NAMES, QUESTIONS } from "../shared/vocational";
 import { ENV } from './_core/env';
 
@@ -235,4 +236,63 @@ export async function recordVocationalAdminAction(
     ipAddress: ipAddress ?? null,
     actor: actor ?? "admin",
   });
+}
+
+export async function getAdminUserByUsername(username: string): Promise<AdminUser | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(adminUsers).where(eq(adminUsers.username, username)).limit(1);
+  return result[0];
+}
+
+export async function getAdminUserById(id: number): Promise<AdminUser | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(adminUsers).where(eq(adminUsers.id, id)).limit(1);
+  return result[0];
+}
+
+export async function countAdminUsers(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select().from(adminUsers);
+  return result.length;
+}
+
+export async function createAdminUser(user: { username: string; passwordHash: string; role?: "viewer" | "admin" }): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("La base de datos no está disponible.");
+  const result = await db.insert(adminUsers).values({
+    username: user.username,
+    passwordHash: user.passwordHash,
+    role: user.role ?? "viewer",
+  });
+  return Number(result[0].insertId);
+}
+
+export async function seedInitialAdminUser(): Promise<void> {
+  const initialUsername = (process.env.ADMIN_INITIAL_USER || "admin").trim();
+  const initialPassword = (process.env.ADMIN_INITIAL_PASSWORD || process.env.ADMIN_ACTION_PASSWORD)?.trim();
+
+  if (!initialPassword) {
+    return;
+  }
+
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const existing = await countAdminUsers();
+    if (existing === 0) {
+      const passwordHash = await bcrypt.hash(initialPassword, 10);
+      await db.insert(adminUsers).values({
+        username: initialUsername,
+        passwordHash,
+        role: "admin",
+      });
+      console.log(`[Seguridad] Administrador inicial sembrado: ${initialUsername}`);
+    }
+  } catch (error) {
+    console.warn("[Seguridad] No se pudo verificar o sembrar el usuario administrador inicial:", error);
+  }
 }
