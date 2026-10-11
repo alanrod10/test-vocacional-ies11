@@ -6,21 +6,37 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { buildVocationalCsv, createVocationalAssessment, deleteAllVocationalAssessments, getAdminUserByUsername, listVocationalAssessments, recordVocationalAdminAction } from "./db";
+import { buildVocationalCsv, createVocationalAssessment, deleteAllVocationalAssessments, deleteVocationalAssessment, getAdminUserByUsername, listVocationalAssessments, recordVocationalAdminAction } from "./db";
 import { clearAdminCookie, setAdminCookie, signAdminToken } from "./_core/adminAuth";
 import { CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, getInterestProfile, hasScorableSignal, scoreSelections } from "../shared/vocational";
 import { HISTORICAL_ARCHIVE, HISTORICAL_ARCHIVE_MESSAGE } from "../shared/archive";
 
+export function categorizeAge(age?: number | null, ageGroup?: string | null): string {
+  if (ageGroup && ["13-15", "16-18", "19-25", "26+"].includes(ageGroup)) {
+    return ageGroup;
+  }
+  if (typeof age === "number" && !isNaN(age)) {
+    if (age <= 15) return "13-15";
+    if (age <= 18) return "16-18";
+    if (age <= 25) return "19-25";
+    return "26+";
+  }
+  return "16-18";
+}
+
 const assessmentInput = z.object({
-  firstName: z.string().trim().min(2).max(80),
-  lastName: z.string().trim().min(2).max(80),
-  age: z.number().int().min(13).max(99),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  age: z.number().int().min(13).max(99).optional(),
+  ageGroup: z.enum(["13-15", "16-18", "19-25", "26+"]).optional(),
   sex: z.enum(["Femenino", "Masculino", "Otro / Prefiero no decir"]),
   studyIntent: z.string().trim().min(2).max(100),
   locality: z.string().trim().min(2).max(120),
   educationStatus: z.string().trim().min(2).max(100),
   dataConsent: z.boolean().refine((value) => value, "Necesitamos tu consentimiento para guardar el resultado."),
   selections: z.array(z.number().int().min(0)).length(QUESTIONS.length),
+}).refine((data) => data.age !== undefined || data.ageGroup !== undefined, {
+  message: "Debés indicar tu edad o grupo de edad.",
 });
 
 const RESET_CHALLENGE_TTL_MS = 2 * 60 * 1000;
@@ -147,8 +163,17 @@ function calculateCatalogAnalytics(rows: Awaited<ReturnType<typeof listVocationa
     sexCounts[row.sex] = (sexCounts[row.sex] ?? 0) + 1;
     localityCounts[row.locality] = (localityCounts[row.locality] ?? 0) + 1;
     educationCounts[row.educationStatus] = (educationCounts[row.educationStatus] ?? 0) + 1;
-    const group = row.age < 18 ? "<18" : row.age <= 24 ? "18–24" : row.age <= 34 ? "25–34" : "35+";
-    ageGroups[group] += 1;
+    let group = "<18";
+    if (typeof row.age === "number" && row.age > 0) {
+      group = row.age < 18 ? "<18" : row.age <= 24 ? "18–24" : row.age <= 34 ? "25–34" : "35+";
+    } else if (row.ageGroup) {
+      if (row.ageGroup === "13-15" || row.ageGroup === "16-18") group = "<18";
+      else if (row.ageGroup === "19-25") group = "18–24";
+      else group = "25–34";
+    }
+    if (ageGroups[group] !== undefined) {
+      ageGroups[group] += 1;
+    }
   });
 
   const ranking = programNames.map((program) => ({
@@ -163,9 +188,11 @@ function calculateCatalogAnalytics(rows: Awaited<ReturnType<typeof listVocationa
     ...topThreeCounts[program],
   })).sort((a, b) => b.count - a.count || b.first - a.first || a.program.localeCompare(b.program));
 
+  const rowsWithAge = rows.filter((r) => typeof r.age === "number" && r.age > 0);
+
   return {
     total,
-    averageAge: total ? Number((rows.reduce((sum, row) => sum + row.age, 0) / total).toFixed(1)) : 0,
+    averageAge: rowsWithAge.length ? Number((rowsWithAge.reduce((sum, row) => sum + row.age!, 0) / rowsWithAge.length).toFixed(1)) : 0,
     topProgram: ranking[0] ?? null,
     ranking,
     topThreeRanking,
@@ -265,17 +292,46 @@ export const appRouter = router({
       const scores = scoreSelections(input.selections);
       const winner = scores[0];
       if (!winner) throw new Error("No fue posible calcular el resultado.");
+      const computedAgeGroup = categorizeAge(input.age, input.ageGroup);
       const id = await createVocationalAssessment({
-        ...input,
+        firstName: null,
+        lastName: null,
+        age: input.age ?? null,
+        ageGroup: computedAgeGroup,
+        sex: input.sex,
+        studyIntent: input.studyIntent,
+        locality: input.locality,
+        educationStatus: input.educationStatus,
+        dataConsent: input.dataConsent,
         resultProgram: winner.program,
         resultArea: winner.area,
         scoreSnapshot: scores,
         questionnaireVersion: QUESTIONNAIRE_VERSION,
         catalogVersion: CATALOG_VERSION,
+        selections: input.selections,
       });
       return { id, winner, topThree: scores.slice(0, 3), interestProfile: getInterestProfile(input.selections) };
     }),
     analytics: viewerProcedure.query(async () => calculateAnalytics(await listVocationalAssessments())),
+    deleteAssessment: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        if (HISTORICAL_ARCHIVE.enabled) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `${HISTORICAL_ARCHIVE_MESSAGE} (No se permite eliminar evaluaciones en el archivo histórico).`,
+          });
+        }
+        enforceAdminRateLimit(ctx.req, "delete_assessment");
+        const actor = ctx.adminUser.username;
+        clearAdminRateLimit(ctx.req, "delete_assessment");
+        const deleted = await deleteVocationalAssessment(input.id);
+        if (!deleted) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "La evaluación no fue encontrada." });
+        }
+        await recordVocationalAdminAction("delete_assessment", "success", { assessmentId: input.id }, ctx.clientIp, actor);
+        return { success: true, id: input.id };
+      }),
     exportCsv: adminProcedure.mutation(async ({ ctx }) => {
       enforceAdminRateLimit(ctx.req, "export");
       const actor = ctx.adminUser.username;

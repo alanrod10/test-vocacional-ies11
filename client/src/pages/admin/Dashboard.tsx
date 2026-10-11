@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   Loader2,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import { HISTORICAL_ARCHIVE } from "@shared/archive";
 
@@ -76,6 +77,16 @@ export default function AdminDashboard() {
     },
     onError: (err) => {
       toast.error(err.message || "Error al reiniciar métricas.");
+    },
+  });
+
+  const deleteAssessment = trpc.vocational.deleteAssessment.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Evaluación #${data.id} eliminada correctamente.`);
+      analytics.refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al eliminar la evaluación.");
     },
   });
 
@@ -152,6 +163,28 @@ export default function AdminDashboard() {
       }
     } catch (err: any) {
       toast.error(err?.message || "Error durante el proceso de reinicio.");
+    }
+  };
+
+  const handleDeleteIndividual = async () => {
+    if (!isAdmin) {
+      toast.error("El borrado requiere rol de administrador.");
+      return;
+    }
+    if (HISTORICAL_ARCHIVE.enabled) {
+      toast.error("El borrado individual está bloqueado en modo histórico.");
+      return;
+    }
+    const idInput = window.prompt("Ingresá el ID numérico de la evaluación a suprimir (derecho al olvido / privacidad):");
+    if (!idInput) return;
+    const id = parseInt(idInput.trim(), 10);
+    if (!id || isNaN(id) || id <= 0) {
+      toast.error("El ID ingresado no es válido.");
+      return;
+    }
+    const confirmed = window.confirm(`¿Confirmás la eliminación permanente e irreversible de la evaluación #${id}?`);
+    if (confirmed) {
+      deleteAssessment.mutate({ id });
     }
   };
 
@@ -264,14 +297,26 @@ export default function AdminDashboard() {
                 </button>
 
                 {!HISTORICAL_ARCHIVE.enabled && (
-                  <button
-                    onClick={handleReset}
-                    disabled={resetResults.isPending || createResetChallenge.isPending}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#d84736] bg-white px-4 py-3 font-display font-extrabold text-[#c55337] shadow-sm transition hover:bg-[#fff0eb] disabled:opacity-50"
-                  >
-                    <RotateCcw size={18} />
-                    {resetResults.isPending ? "Reiniciando…" : "Reiniciar métricas"}
-                  </button>
+                  <>
+                    <button
+                      onClick={handleDeleteIndividual}
+                      disabled={deleteAssessment.isPending}
+                      title="Eliminar una evaluación específica por derecho al olvido / privacidad"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#d84736]/40 bg-white px-4 py-3 font-display font-extrabold text-[#c55337] shadow-sm transition hover:bg-[#fff0eb] disabled:opacity-50"
+                    >
+                      <Trash2 size={18} />
+                      {deleteAssessment.isPending ? "Eliminando…" : "Borrar por ID"}
+                    </button>
+
+                    <button
+                      onClick={handleReset}
+                      disabled={resetResults.isPending || createResetChallenge.isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#d84736] bg-white px-4 py-3 font-display font-extrabold text-[#c55337] shadow-sm transition hover:bg-[#fff0eb] disabled:opacity-50"
+                    >
+                      <RotateCcw size={18} />
+                      {resetResults.isPending ? "Reiniciando…" : "Reiniciar métricas"}
+                    </button>
+                  </>
                 )}
               </>
             ) : (

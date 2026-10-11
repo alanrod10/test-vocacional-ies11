@@ -27,9 +27,10 @@ export type InsertUser = typeof users.$inferInsert;
 
 export const vocationalAssessments = mysqlTable("vocational_assessments", {
   id: int("id").autoincrement().primaryKey(),
-  firstName: varchar("firstName", { length: 80 }).notNull(),
-  lastName: varchar("lastName", { length: 80 }).notNull(),
-  age: int("age").notNull(),
+  firstName: varchar("firstName", { length: 80 }),
+  lastName: varchar("lastName", { length: 80 }),
+  age: int("age"),
+  ageGroup: varchar("ageGroup", { length: 20 }),
   sex: varchar("sex", { length: 40 }).notNull(),
   studyIntent: varchar("studyIntent", { length: 100 }).default("No especificado").notNull(),
   locality: varchar("locality", { length: 120 }).default("No informado").notNull(),

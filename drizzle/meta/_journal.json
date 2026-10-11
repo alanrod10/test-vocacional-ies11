@@ -85,6 +85,13 @@
       "when": 1791757990388,
       "tag": "0011_handy_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1791759596567,
+      "tag": "0012_thin_firelord",
+      "breakpoints": true
     }
   ]
 }

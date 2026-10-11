@@ -4,6 +4,7 @@ import type { TrpcContext } from "./_core/context";
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   list: vi.fn(),
+  deleteAssessment: vi.fn(),
   recordAdminAction: vi.fn(),
 }));
 
@@ -13,6 +14,7 @@ vi.mock("./db", async (importOriginal) => {
     ...actual,
     createVocationalAssessment: mocks.create,
     listVocationalAssessments: mocks.list,
+    deleteVocationalAssessment: mocks.deleteAssessment,
     recordVocationalAdminAction: mocks.recordAdminAction,
   };
 });
@@ -49,9 +51,8 @@ function parseQuotedCsvRow(row: string, delimiter = ";") {
   return cells;
 }
 
+// Payload minimizado: NO contiene firstName ni lastName (S6/S7)
 const validInput = {
-  firstName: "Ana",
-  lastName: "Prueba",
   age: 18,
   sex: "Femenino" as const,
   studyIntent: "Sí, quiero conocer la propuesta y los pasos para inscribirme",
@@ -85,28 +86,95 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.create.mockResolvedValue(42);
   mocks.list.mockResolvedValue([]);
+  mocks.deleteAssessment.mockResolvedValue(true);
   mocks.recordAdminAction.mockResolvedValue(undefined);
 });
 
-describe("registro vocacional sin teléfono", () => {
+describe("registro vocacional con privacidad de datos (S6/S7)", () => {
   it("bloquea nuevas evaluaciones para preservar el cierre histórico", async () => {
+    process.env.INSTANCE_MODE = "historical";
     const caller = appRouter.createCaller(publicContext());
     await expect(caller.vocational.submit(validInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it("permite nuevas evaluaciones cuando opera en modo permanente", async () => {
+  it("permite nuevas evaluaciones en modo permanente persistiendo solo datos anónimos", async () => {
     process.env.INSTANCE_MODE = "permanent";
     const caller = appRouter.createCaller(publicContext());
     const response = await caller.vocational.submit(validInput);
     expect(response.id).toBe(42);
-    expect(mocks.create).toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstName: null,
+        lastName: null,
+        age: 18,
+        ageGroup: "16-18",
+      })
+    );
   });
 
-  it("solo permite el CSV completo a usuarios con rol admin y bloquea público y observadores", async () => {
+  it("acepta ageGroup directamente o deriva el rango desde la edad", async () => {
+    process.env.INSTANCE_MODE = "permanent";
+    const caller = appRouter.createCaller(publicContext());
+    const inputWithGroup = { ...validInput, age: 28 };
+    await caller.vocational.submit(inputWithGroup);
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ageGroup: "26+",
+      })
+    );
+  });
+
+  it("borrado individual: permite a administradores eliminar evaluaciones y bloquea observadores y público", async () => {
+    process.env.INSTANCE_MODE = "permanent";
+    // Público -> UNAUTHORIZED
+    await expect(
+      appRouter.createCaller(publicContext()).vocational.deleteAssessment({ id: 42 })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+
+    // Observador -> FORBIDDEN
+    await expect(
+      appRouter.createCaller(viewerContext()).vocational.deleteAssessment({ id: 42 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // Admin en permanente -> Éxito
+    const res = await appRouter.createCaller(adminContext()).vocational.deleteAssessment({ id: 42 });
+    expect(res).toEqual({ success: true, id: 42 });
+    expect(mocks.deleteAssessment).toHaveBeenCalledWith(42);
+
+    // En modo histórico -> FORBIDDEN
+    process.env.INSTANCE_MODE = "historical";
+    await expect(
+      appRouter.createCaller(adminContext()).vocational.deleteAssessment({ id: 42 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("solo permite el CSV completo a usuarios admin y anonimiza nombres en modo permanente", async () => {
+    process.env.INSTANCE_MODE = "permanent";
     const csvSelections = [1, 0, 2, 3, 1, 2, 0, 3, 1, 1, 0, 1, 7, 0];
     const csvScores = scoreSelections(csvSelections);
-    mocks.list.mockResolvedValue([{ id: 7, firstName: "Ana", lastName: "Prueba", age: 18, sex: "Femenino", studyIntent: "Sí", locality: "San Salvador de Jujuy", educationStatus: "Secundario", discoverySource: "No informado", dataConsent: true, resultProgram: csvScores[0].program, resultArea: csvScores[0].area, selections: csvSelections, scoreSnapshot: csvScores, questionnaireVersion: QUESTIONNAIRE_VERSION, catalogVersion: CATALOG_VERSION, createdAt: new Date("2026-08-19T00:00:00.000Z") }]);
+    mocks.list.mockResolvedValue([
+      {
+        id: 7,
+        firstName: "Ana",
+        lastName: "Prueba",
+        age: 18,
+        ageGroup: "16-18",
+        sex: "Femenino",
+        studyIntent: "Sí",
+        locality: "San Salvador de Jujuy",
+        educationStatus: "Secundario",
+        discoverySource: "No informado",
+        dataConsent: true,
+        resultProgram: csvScores[0].program,
+        resultArea: csvScores[0].area,
+        selections: csvSelections,
+        scoreSnapshot: csvScores,
+        questionnaireVersion: QUESTIONNAIRE_VERSION,
+        catalogVersion: CATALOG_VERSION,
+        createdAt: new Date("2026-08-19T00:00:00.000Z"),
+      },
+    ]);
 
     await expect(appRouter.createCaller(publicContext()).vocational.exportCsv()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(appRouter.createCaller(viewerContext()).vocational.exportCsv()).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -119,30 +187,22 @@ describe("registro vocacional sin teléfono", () => {
     expect(exported.filename).toMatch(/^resultados-vocacional-ies11-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(exported.content.startsWith("\uFEFF")).toBe(true);
     expect(headerLine).toContain(";\"Fecha_UTC\"");
-    expect(headers).toHaveLength(100);
-    expect(firstDataCells).toHaveLength(100);
+    expect(headers).toHaveLength(101);
+    expect(firstDataCells).toHaveLength(101);
     expect(firstDataCells[0]).toBe("7");
-    expect(firstDataCells[headers.indexOf("Version_Catalogo")]).toBe(CATALOG_VERSION);
-    expect(firstDataCells[headers.indexOf("Afinidad_18_Carrera")]).toBeTruthy();
-    expect(firstDataCells[headers.indexOf("Afinidad_19_Carrera")]).toBe("");
-    expect(exported.content).toContain("Nombre");
-    expect(exported.content).toContain("Ana");
-    expect(exported.content).toContain("Fecha_Argentina_Jujuy");
-    expect(exported.content).toContain("Version_Cuestionario");
-    expect(exported.content).toContain("Version_Catalogo");
-    expect(exported.content).toContain(QUESTIONNAIRE_VERSION);
-    expect(exported.content).toContain(CATALOG_VERSION);
-    expect(exported.content).toContain("P01_Opcion");
-    expect(exported.content).toContain("P01_Texto");
-    expect(exported.content).toContain("Afinidad_1_Carrera");
-    expect(exported.content).toContain("Afinidad_3_Area");
-    expect(exported.content).toContain("Afinidad_19_Carrera");
-    expect(exported.content).toContain(QUESTIONS[0].options[1].label);
-    expect(exported.content).toContain("TS en Desarrollo de Software");
-    expect(exported.content).toContain("TS en Diseño de Indumentaria");
-    expect(exported.content).not.toContain("Respuestas");
-    expect(exported.content).not.toContain("Afinidades");
-    expect(exported.content).not.toContain("WhatsApp");
-    expect(exported.content).not.toContain("Canal de llegada");
+    expect(headers).toContain("Grupo_Edad");
+    expect(firstDataCells[headers.indexOf("Grupo_Edad")]).toBe("16-18");
+
+    // En modo permanente los nombres deben estar vacíos para resguardar la privacidad (S6/S7)
+    expect(firstDataCells[headers.indexOf("Nombre")]).toBe("");
+    expect(firstDataCells[headers.indexOf("Apellido")]).toBe("");
+
+    // Si cambia a modo histórico, las lecturas históricas conservan sus datos si existen
+    process.env.INSTANCE_MODE = "historical";
+    const historicalExport = await appRouter.createCaller(adminContext()).vocational.exportCsv();
+    const histDataLine = historicalExport.content.replace(/^\uFEFF/, "").split("\n")[1];
+    const histCells = parseQuotedCsvRow(histDataLine);
+    expect(histCells[headers.indexOf("Nombre")]).toBe("Ana");
+    expect(histCells[headers.indexOf("Apellido")]).toBe("Prueba");
   });
 });

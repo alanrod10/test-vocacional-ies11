@@ -92,9 +92,10 @@ export async function getUserByOpenId(openId: string) {
 }
 
 export type CreateAssessmentInput = {
-  firstName: string;
-  lastName: string;
-  age: number;
+  firstName?: string | null;
+  lastName?: string | null;
+  age?: number | null;
+  ageGroup?: string | null;
   sex: string;
   studyIntent: string;
   locality: string;
@@ -176,8 +177,9 @@ function getAffinityColumns(scoreSnapshot: CreateAssessmentInput["scoreSnapshot"
 
 /** Exportación completa destinada únicamente a personal autorizado del IES N.° 11. */
 export function buildVocationalCsv(rows: Awaited<ReturnType<typeof listVocationalAssessments>>) {
+  const isHistorical = (process.env.INSTANCE_MODE || "historical") === "historical";
   const headers = [
-    "ID", "Fecha_UTC", "Fecha_Argentina_Jujuy", "Version_Cuestionario", "Version_Catalogo", "Nombre", "Apellido", "Edad", "Sexo",
+    "ID", "Fecha_UTC", "Fecha_Argentina_Jujuy", "Version_Cuestionario", "Version_Catalogo", "Nombre", "Apellido", "Edad", "Grupo_Edad", "Sexo",
     "Localidad", "Situacion_Educativa", "Consentimiento_Datos",
     "Intencion_Estudiar_IES11", "Tecnicatura_Recomendada", "Area",
     ...QUESTIONS.flatMap((question) => {
@@ -196,9 +198,10 @@ export function buildVocationalCsv(rows: Awaited<ReturnType<typeof listVocationa
     formatJujuyDate(row.createdAt),
     row.questionnaireVersion ?? "2026.08-original",
     row.catalogVersion ?? "2026.08-legado-19",
-    row.firstName,
-    row.lastName,
-    row.age,
+    isHistorical ? (row.firstName ?? "") : "",
+    isHistorical ? (row.lastName ?? "") : "",
+    row.age ?? "",
+    row.ageGroup ?? "",
     row.sex,
     row.locality,
     row.educationStatus,
@@ -211,6 +214,13 @@ export function buildVocationalCsv(rows: Awaited<ReturnType<typeof listVocationa
   ].map(escapeCsv).join(CSV_DELIMITER));
 
   return `\uFEFF${headers.map(escapeCsv).join(CSV_DELIMITER)}\n${values.join("\n")}`;
+}
+
+export async function deleteVocationalAssessment(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("La base de datos no está disponible.");
+  const result = await db.delete(vocationalAssessments).where(eq(vocationalAssessments.id, id));
+  return Number(result[0].affectedRows ?? 0) > 0;
 }
 
 export async function deleteAllVocationalAssessments() {

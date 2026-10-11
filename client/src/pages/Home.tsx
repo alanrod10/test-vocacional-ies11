@@ -21,7 +21,18 @@ type Stage = "register" | "test" | "result";
 type ParticipantProfile = { firstName: string; lastName: string; age: string; sex: Sex | ""; locality: string; educationStatus: string; dataConsent: boolean };
 
 const sexOptions: Sex[] = ["Femenino", "Masculino", "Otro / Prefiero no decir"];
-const localityOptions = ["San Salvador de Jujuy", "Palpalá", "Perico", "El Carmen", "Libertador General San Martín", "Humahuaca / Quebrada", "Otra localidad de Jujuy", "Otra provincia o país", "Prefiero no indicarla"];
+const localityOptions = [
+  "San Salvador de Jujuy",
+  "Palpalá",
+  "Perico / Valles",
+  "El Carmen",
+  "San Pedro / Ledesma (Yungas)",
+  "Quebrada",
+  "Puna",
+  "Otra localidad de Jujuy",
+  "Otra provincia o país",
+  "Prefiero no indicarla",
+];
 const educationOptions = ["Secundario: 4.º o 5.º año", "Secundario: último año", "Egresé del secundario", "Estudio o trabajo actualmente", "Otra situación educativa"];
 const emptyParticipantProfile: ParticipantProfile = { firstName: "", lastName: "", age: "", sex: "", locality: "", educationStatus: "", dataConsent: false };
 
@@ -99,8 +110,6 @@ export default function Home() {
         const transition = resolveQuestionTransition(displayQuestionIndex, nextAnswers.length, QUESTIONS.length);
         if (transition.isComplete) {
           submit.mutate({
-            firstName: profile.firstName.trim(),
-            lastName: profile.lastName.trim(),
             age: Number(profile.age),
             sex: profile.sex as Sex,
             studyIntent: QUESTIONS[QUESTIONS.length - 1].options[nextAnswers[nextAnswers.length - 1]].label,
@@ -237,8 +246,8 @@ function Registration({ profile, setProfile, errors, onStart }: { profile: Parti
         <Field label="Edad" error={errors.age}><input className={`${inputClass} ${errors.age ? "border-[#e45542]" : "border-[#dbe0df]"}`} value={profile.age} onChange={(e) => setProfile((p) => ({ ...p, age: e.target.value.replace(/\D/g, "").slice(0, 2) }))} placeholder="Ej. 17" inputMode="numeric" /></Field>
         <Field label="Sexo" error={errors.sex}><div className="mt-2 grid gap-2"><div className="flex flex-wrap gap-2">{sexOptions.map((option) => <button type="button" key={option} onClick={() => setProfile((p) => ({ ...p, sex: option }))} className={`rounded-xl border px-3 py-2 text-sm font-bold transition-all ${profile.sex === option ? "border-[#172124] bg-[#172124] text-white" : "border-[#dbe0df] bg-white text-[#526064] hover:border-[#172124]/40"}`}>{option}</button>)}</div></div></Field>
         <div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Localidad" error={errors.locality}><select className={`${inputClass} ${errors.locality ? "border-[#e45542]" : "border-[#dbe0df]"}`} value={profile.locality} onChange={(e) => setProfile((p) => ({ ...p, locality: e.target.value }))}><option value="">Seleccioná una opción</option>{localityOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field><Field label="Situación educativa" error={errors.educationStatus}><select className={`${inputClass} ${errors.educationStatus ? "border-[#e45542]" : "border-[#dbe0df]"}`} value={profile.educationStatus} onChange={(e) => setProfile((p) => ({ ...p, educationStatus: e.target.value }))}><option value="">Seleccioná una opción</option>{educationOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field></div>
-        <div className={`consent-notice mt-5 rounded-2xl border p-4 ${errors.dataConsent ? "border-[#e45542] bg-[#fff4f1]" : "border-[#bfe8ff] bg-[#f5fbff]"}`}><label className="flex cursor-pointer gap-3"><input type="checkbox" checked={profile.dataConsent} onChange={(e) => setProfile((p) => ({ ...p, dataConsent: e.target.checked }))} className="mt-1 h-5 w-5 shrink-0 accent-[#1976b7]" /><span className="text-sm leading-relaxed text-[#405f73]"><strong className="text-[#102d54]">Autorizo el uso institucional de mis datos.</strong> El IES N.° 11 guardará mi nombre, apellido y respuestas en una base protegida para orientación y analítica agregada.</span></label>{errors.dataConsent && <span className="mt-2 block text-xs font-medium text-[#d84736]">{errors.dataConsent}</span>}</div>
-        <button onClick={onStart} className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-4 font-display text-lg font-extrabold text-white shadow-[0_5px_0_#155c96] transition duration-150 hover:-translate-y-0.5 hover:bg-[#155f98] active:translate-y-1 active:shadow-none">Comenzar mi test <ArrowRight size={20} /></button><p className="mt-3 text-center text-xs leading-relaxed text-[#687577]">Tus datos identificatorios se resguardan para uso institucional. El panel público nunca los muestra.</p>
+        <div className={`consent-notice mt-5 rounded-2xl border p-4 ${errors.dataConsent ? "border-[#e45542] bg-[#fff4f1]" : "border-[#bfe8ff] bg-[#f5fbff]"}`}><label className="flex cursor-pointer gap-3"><input type="checkbox" checked={profile.dataConsent} onChange={(e) => setProfile((p) => ({ ...p, dataConsent: e.target.checked }))} className="mt-1 h-5 w-5 shrink-0 accent-[#1976b7]" /><span className="text-sm leading-relaxed text-[#405f73]"><strong className="text-[#102d54]">Consentimiento informado.</strong> Entiendo que mis respuestas se usarán para estadísticas institucionales anónimas. Mi nombre y apellido NO serán guardados en ninguna base de datos.</span></label>{errors.dataConsent && <span className="mt-2 block text-xs font-medium text-[#d84736]">{errors.dataConsent}</span>}</div>
+        <button onClick={onStart} className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1976b7] px-5 py-4 font-display text-lg font-extrabold text-white shadow-[0_5px_0_#155c96] transition duration-150 hover:-translate-y-0.5 hover:bg-[#155f98] active:translate-y-1 active:shadow-none">Comenzar mi test <ArrowRight size={20} /></button><p className="mt-3 text-center text-xs leading-relaxed text-[#687577]">Tu nombre se usa exclusivamente en tu dispositivo para emitir tu informe PDF y tarjeta digital.</p>
       </div>
     </div>
   </div>;
