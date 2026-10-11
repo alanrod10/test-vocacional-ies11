@@ -79,9 +79,28 @@ beforeEach(() => {
 
 describe("registro vocacional sin teléfono", () => {
   it("bloquea nuevas evaluaciones para preservar el cierre histórico", async () => {
-    const caller = appRouter.createCaller(publicContext());
-    await expect(caller.vocational.submit(validInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(mocks.create).not.toHaveBeenCalled();
+    const prevMode = process.env.INSTANCE_MODE;
+    process.env.INSTANCE_MODE = "historical";
+    try {
+      const caller = appRouter.createCaller(publicContext());
+      await expect(caller.vocational.submit(validInput)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(mocks.create).not.toHaveBeenCalled();
+    } finally {
+      process.env.INSTANCE_MODE = prevMode;
+    }
+  });
+
+  it("permite nuevas evaluaciones cuando opera en modo permanente", async () => {
+    const prevMode = process.env.INSTANCE_MODE;
+    process.env.INSTANCE_MODE = "permanent";
+    try {
+      const caller = appRouter.createCaller(publicContext());
+      const response = await caller.vocational.submit(validInput);
+      expect(response.id).toBe(42);
+      expect(mocks.create).toHaveBeenCalled();
+    } finally {
+      process.env.INSTANCE_MODE = prevMode;
+    }
   });
 
   it("valida la contraseña privada configurada mediante una llamada administrativa liviana", async () => {
