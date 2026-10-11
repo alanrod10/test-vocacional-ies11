@@ -36,7 +36,7 @@ export async function downloadVocationalReport(report: VocationalReport) {
   const soft = "#EAF6FF";
   let y = 18;
 
-  const logo = await fetchAsDataUrl("/manus-storage/logo-ies11-jujuy_43c40f2c.jpg");
+  const logo = await fetchAsDataUrl("/logo-ies11-jujuy.jpg");
   if (logo) doc.addImage(logo, "JPEG", 15, 12, 20, 20);
   doc.setFillColor(navy);
   doc.roundedRect(40, 12, 155, 20, 4, 4, "F");
@@ -46,7 +46,7 @@ export async function downloadVocationalReport(report: VocationalReport) {
   doc.text("Informe de orientación vocacional", 47, 21);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.text("IES N.° 11 · Expo Educativa 2026", 47, 27);
+  doc.text("IES N.° 11 · Jujuy", 47, 27);
   y = 43;
 
   const addTitle = (title: string) => {

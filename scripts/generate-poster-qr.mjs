@@ -1,7 +1,7 @@
 import QRCode from "qrcode";
 
-const targetUrl = "https://vocatest11-j6zpasaq.manus.space";
-const outputPath = "/home/ubuntu/ies11-poster/qr-test-vocacional-ies11.png";
+const targetUrl = process.env.APP_URL ?? "https://testvocacional.ies11.edu.ar";
+const outputPath = process.argv[2] ?? "./qr-test-vocacional-ies11.png";
 
 await QRCode.toFile(outputPath, targetUrl, {
   width: 1800,

@@ -4,8 +4,10 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 
-OUT = Path("/home/ubuntu/qr-test-vocacional-ies11.png")
-URL = "https://vocatest11-j6zpasaq.manus.space"
+import os
+
+OUT = Path(os.environ.get("POSTER_OUTPUT_PATH", "./qr-test-vocacional-ies11.png"))
+URL = os.environ.get("APP_URL", "https://testvocacional.ies11.edu.ar")
 W, H = 1600, 2200
 
 
