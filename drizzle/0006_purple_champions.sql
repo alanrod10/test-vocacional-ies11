@@ -1,0 +1,1 @@
+ALTER TABLE `vocational_assessments` DROP COLUMN `whatsapp`;

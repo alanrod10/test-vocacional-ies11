@@ -1,0 +1,1 @@
+ALTER TABLE `vocational_assessments` MODIFY COLUMN `dataConsent` tinyint NOT NULL;

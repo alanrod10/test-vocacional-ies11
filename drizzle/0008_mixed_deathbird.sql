@@ -1,0 +1,1 @@
+ALTER TABLE `vocational_assessments` ADD `catalogVersion` varchar(50) DEFAULT '2026.08-legado-19' NOT NULL;

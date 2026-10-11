@@ -1,0 +1,1 @@
+ALTER TABLE `vocational_assessments` ADD `questionnaireVersion` varchar(50) DEFAULT '2026.08-original' NOT NULL;

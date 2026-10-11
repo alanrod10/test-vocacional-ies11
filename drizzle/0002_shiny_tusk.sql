@@ -1,0 +1,1 @@
+ALTER TABLE `vocational_assessments` ADD `studyIntent` varchar(100) DEFAULT 'No especificado' NOT NULL;

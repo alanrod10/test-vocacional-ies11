@@ -1,0 +1,1 @@
+ALTER TABLE `vocational_assessments` ADD `whatsapp` varchar(32) DEFAULT 'No informado' NOT NULL;

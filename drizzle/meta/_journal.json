@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1786672002018,
+      "tag": "0000_faithful_nextwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1786672174466,
+      "tag": "0001_regular_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1786757147016,
+      "tag": "0002_shiny_tusk",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1787166965925,
+      "tag": "0003_kind_war_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1787169975416,
+      "tag": "0004_bumpy_sinister_six",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1787170415157,
+      "tag": "0005_woozy_swordsman",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1787176380496,
+      "tag": "0006_purple_champions",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1787262468111,
+      "tag": "0007_living_queen_noir",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1787263905271,
+      "tag": "0008_mixed_deathbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1787265976937,
+      "tag": "0009_gigantic_norman_osborn",
+      "breakpoints": true
+    }
+  ]
+}

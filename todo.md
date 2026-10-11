@@ -1,0 +1,233 @@
+# Project TODO
+
+- [x] Definir las 19 tecnicaturas, las 5 áreas vocacionales y la matriz de puntuación de 10 preguntas.
+- [x] Crear el esquema de base de datos para resultados de evaluaciones vocacionales.
+- [x] Implementar procedimientos públicos para guardar resultados, leer analítica y exportar CSV.
+- [x] Construir la pantalla de registro con validación de nombre, apellido, edad y sexo.
+- [x] Construir el test de 10 preguntas con avance automático y barra de progreso.
+- [x] Construir la pantalla de resultado con carrera ganadora, perfil, campo laboral en Jujuy/NOA y Top 3.
+- [x] Construir el dashboard de analítica con KPIs, ranking, distribuciones y exportación CSV.
+- [x] Aplicar una interfaz mobile-first llamativa y accesible con colores institucionales del IES N.° 11.
+- [x] Escribir y ejecutar pruebas unitarias del motor de puntuación y de las consultas de analítica.
+- [x] Verificar el flujo completo en escritorio y móvil, y corregir incidencias.
+- [x] Guardar una versión final del sitio lista para publicar.
+- [x] Agregar un botón de reinicio de resultados con autenticación, permiso de coordinación y confirmación explícita.
+- [x] Validar que personas sin autorización no puedan borrar datos y que el panel se actualice tras el reinicio.
+- [x] Ejecutar una prueba de integración simulada del reinicio administrativo sin modificar resultados reales.
+- [x] Convertir el reinicio de resultados en una acción pública con doble confirmación explícita.
+- [x] Validar que el reinicio público actualice el panel sin requerir inicio de sesión.
+- [x] Respaldar la doble confirmación pública con un desafío temporal validado por el servidor.
+- [x] Probar el desafío temporal y la actualización del panel sin borrar resultados reales.
+- [x] Simular el ciclo completo de analítica antes y después del reinicio público.
+- [x] Investigar criterios de orientación vocacional, intereses ocupacionales y calidad de preguntas aplicables al test.
+- [x] Auditar la cobertura, discriminación y sesgos de las preguntas y puntuaciones actuales.
+- [x] Rediseñar preguntas, opciones, ponderaciones y explicación de resultados para las 19 tecnicaturas.
+- [x] Incorporar indicadores de afinidad y recomendación responsable en la pantalla de resultados.
+- [x] Ejecutar pruebas de escenarios vocacionales y consistencia del nuevo motor de puntuación.
+- [x] Preparar e integrar el logo institucional del IES N.° 11 como activo web.
+- [x] Ajustar la interfaz a la gama visual azul institucional del IES N.° 11.
+- [x] Incorporar la leyenda de autoría de estudiantes de Ciencias de Datos e Inteligencia Artificial del IES N.° 11.
+- [x] Agregar como última pregunta la intención de estudiar en el IES N.° 11.
+- [x] Diseñar una revelación animada, accesible y llamativa de la tecnicatura recomendada.
+- [x] Generar, aplicar y comprobar la migración de intención de estudio del IES N.° 11.
+- [x] Ejecutar y verificar pruebas y compilación con las 16 preguntas.
+- [x] Validar visualmente la identidad azul y la animación de resultado en móvil y escritorio.
+- [x] Recorrer las 16 preguntas y capturar la revelación final en escritorio y móvil sin conservar resultados de prueba.
+- [x] Verificar las mejoras institucionales en móvil y escritorio.
+- [x] Investigar y documentar fuentes oficiales para la oferta, materias, inscripción y contacto del IES N.° 11.
+- [x] Reducir el test a 10–12 preguntas con modalidades múltiples, slider, binaria y preferencia.
+- [x] Agregar WhatsApp validado al registro y persistirlo con cada resultado.
+- [x] Enriquecer las 19 tecnicaturas con materias principales, campo laboral regional y bloque institucional verificable.
+- [x] Generar y descargar un informe PDF institucional completo desde la pantalla de resultados.
+- [x] Probar el flujo multiformato, la persistencia y el PDF en móvil y escritorio mediante pruebas automatizadas sin datos reales y verificación visual responsiva.
+- [x] Actualizar las pruebas de regresión para validar los diez escenarios multiformato, los perfiles enriquecidos y el cierre institucional.
+- [x] Documentar explícitamente la fuente institucional del contacto publicado y su condición de verificación periódica.
+- [x] Recorrer visualmente en escritorio las modalidades binaria, slider y preferencia sin almacenar evaluaciones.
+- [x] Verificar visualmente la pantalla de resultados en escritorio y móvil, incluyendo el informe PDF y el CTA de WhatsApp del IES N.° 11.
+- [x] Automatizar la prueba de composición del PDF y del procedimiento de resultado sin insertar datos de prueba en la base de datos.
+- [x] Evaluar alternativas seguras para entregar el informe PDF al WhatsApp informado, sin exponer datos personales.
+- [x] Rediseñar el instrumento en 12 preguntas claras, situacionales y discriminativas para las 19 tecnicaturas.
+- [x] Ampliar el perfil profesional de cada tecnicatura con competencias, alcance del título y tareas de egreso.
+- [x] Incorporar un código QR visible y escaneable hacia el test en la página principal.
+- [x] Mejorar la presentación de resultados y validar la experiencia en móvil y escritorio.
+- [x] Mantener el informe como descarga y uso compartido manual, sin envío automatizado por WhatsApp.
+- [x] Retirar el contacto de WhatsApp del IES N.° 11 de la interfaz y del informe.
+- [x] Resguardar nombre, apellido y teléfono en la base de datos sin exponer datos identificatorios en funciones públicas.
+- [x] Recopilar con consentimiento localidad, situación educativa y canal de descubrimiento para analítica institucional agregada.
+- [x] Sustituir cualquier exportación pública de datos personales por datos agregados no identificatorios.
+- [x] Incorporar una barra visual de progreso clara para las 12 preguntas del cuestionario.
+- [x] Aplicar transiciones accesibles y fluidas entre las preguntas del test.
+- [x] Diseñar un afiche PDF imprimible con el QR de acceso y el logo institucional del IES N.° 11.
+- [x] Validar el flujo animado y la legibilidad del afiche antes de publicar.
+- [x] Mantener visible la pregunta saliente durante la animación antes de avanzar el estado de respuestas.
+- [x] Verificar el avance animado entre varias preguntas en móvil y escritorio sin guardar evaluaciones de prueba.
+- [x] Agregar una prueba de regresión para el avance diferido entre preguntas.
+- [x] Documentar la verificación visual de dos transiciones consecutivas del cuestionario corregido.
+- [x] Auditar navegación, registro, cuestionario, resultados y panel para identificar ajustes finales de calidad.
+- [x] Quitar el campo “¿Cómo conociste el test?” del registro, del contrato de datos y de la analítica.
+- [x] Crear una exportación CSV completa accesible únicamente para personal autenticado y autorizado.
+- [x] Confirmar que la exportación protegida incluye los datos recolectados y no es accesible desde funciones públicas.
+- [x] Perfeccionar jerarquía visual, microcopys, estados de carga, foco visible y uso móvil del producto.
+- [x] Incorporar una mejora útil adicional de orientación o calidad de datos sin añadir fricción innecesaria.
+- [x] Ampliar la suite con casos de exportación autorizada, rechazada y formulario actualizado.
+- [x] Validar en escritorio y móvil los recorridos público, resultado, panel y exportación protegida.
+- [x] Implementar y verificar estados de foco visibles y consistentes en los controles interactivos principales.
+- [x] Verificar y documentar la pantalla final de resultados en escritorio y móvil tras los ajustes definitivos.
+- [x] Comprobar los estados sin sesión, sin permiso y autorizado de la exportación CSV protegida.
+- [x] Reemplazar el acceso administrativo actual por una contraseña privada para exportar el CSV completo.
+- [x] Exigir la misma contraseña privada antes de reiniciar las métricas del stand.
+- [x] Configurar la contraseña como secreto, sin exponerla en el cliente ni en el repositorio.
+- [x] Retirar WhatsApp del registro, de la base de datos nueva y del CSV de exportación.
+- [x] Crear una tarjeta visual descargable y apta para redes con el resultado vocacional individual.
+- [x] Incorporar un QR generado al finalizar el test que dirija a la tarjeta compartible del resultado.
+- [x] Probar contraseña correcta e incorrecta, reinicio, exportación, descarga de imagen y QR en móvil y escritorio.
+- [x] Agregar una prueba de regresión para la URL codificada de la tarjeta compartible.
+- [x] Eliminar definitivamente la columna heredada de WhatsApp del esquema y de la base de datos.
+- [x] Ejecutar una verificación funcional documentada de la descarga PNG y del enlace QR compartible en móvil y escritorio.
+- [x] Confirmar en navegador la descarga real del PNG de la tarjeta compartible.
+- [x] Abrir en navegador la URL codificada utilizada por el QR y verificar su tarjeta descargable.
+- [x] Auditar la discriminación, cobertura y claridad de las preguntas actuales para las 19 tecnicaturas.
+- [x] Refinar el cuestionario situacional y las ponderaciones, manteniéndolo entre 12 y 15 preguntas.
+- [x] Validar con pruebas automatizadas y escenarios representativos el instrumento vocacional actualizado.
+- [x] Comprobar visualmente el nuevo flujo de preguntas en móvil y escritorio.
+- [x] Validar visualmente en escritorio preguntas iniciales, intermedias y avanzadas del cuestionario de 14 pasos.
+- [x] Validar visualmente en móvil preguntas iniciales, intermedias y avanzadas del cuestionario de 14 pasos.
+- [x] Descartar el diseño de sesión anónima para recuperar respuestas incompletas, a pedido del usuario.
+- [x] Descartar la persistencia, procedimientos y migración de recuperación, a pedido del usuario.
+- [x] Descartar la generación, guardado progresivo y reanudación del código de sesión, a pedido del usuario.
+- [x] Ampliar los perfiles profesionales de las 19 tecnicaturas con explicación clara y técnicamente precisa.
+- [x] Cancelar las pruebas de privacidad, caducidad y recuperación de sesiones por el cambio de alcance.
+- [x] Cancelar la validación del código de reanudación por el cambio de alcance.
+- [x] Verificar la integridad de los perfiles ampliados en resultados, tarjeta compartible e informe PDF.
+- [x] Validar visualmente en móvil y escritorio la presentación de los perfiles enriquecidos.
+- [x] Mantener explícitamente un resumen profesional breve en la tarjeta compartible para preservar su legibilidad.
+- [x] Validar la tarjeta compartible tras ampliar los perfiles en móvil y escritorio, sin recortes ni desbordamientos.
+- [x] Diseñar una tabla comparativa de las tres afinidades principales con campos útiles para la decisión.
+- [x] Integrar la tabla comparativa responsiva al final de la pantalla de resultado.
+- [x] Cubrir los datos comparativos con pruebas automatizadas.
+- [x] Validar visualmente la tabla en móvil y escritorio.
+- [x] Añadir una presentación apilada de las tres afinidades para que la comparación móvil no requiera desplazamiento horizontal.
+- [x] Redactar una guía breve de exposición que explique el recorrido, las funciones y la privacidad de la página.
+- [x] Revisar la guía para asegurar claridad y entregar el material listo para presentar.
+- [x] Preparar la guía final como archivo adjunto para la exposición ante el profesor.
+- [x] Redactar una guía condensada de dos a tres hojas con los puntos esenciales de la exposición.
+- [x] Revisar y entregar la guía condensada lista para imprimir o presentar.
+- [x] Confirmar claridad, consistencia y extensión aproximada de dos a tres hojas de la guía condensada.
+- [x] Preparar la guía condensada final como archivo adjunto para su entrega al usuario.
+- [x] Redactar una guía general, breve y sin referencias a una exposición para explicar el proyecto.
+- [x] Generar y verificar un afiche imprimible con el QR de acceso al Test Vocacional IES N.° 11.
+- [x] Preparar la guía general y el afiche final como archivos adjuntos para compartir o imprimir.
+- [x] Auditar la analítica actual para diferenciar primera afinidad y presencia acumulada en el Top 3.
+- [x] Diseñar el cálculo por puesto para las tres afinidades, sin exponer datos personales.
+- [x] Incorporar un gráfico general de presencia en el Top 3, separado del ranking de primera afinidad.
+- [x] Agregar una alternativa neutral sin puntaje a todos los formatos de respuesta aplicables.
+- [x] Actualizar las pruebas de motor, analítica y panel con los nuevos comportamientos.
+- [x] Validar visualmente el panel y las preguntas modificadas en móvil y escritorio.
+- [x] Validar en escritorio y móvil la alternativa neutral en una pregunta binaria y otra de preferencia.
+- [x] Documentar la verificación de la alternativa neutral en todos los formatos de pregunta aplicables.
+- [x] Confirmar que la documentación de los formatos binario y de preferencia quedó guardada correctamente.
+- [x] Auditar cobertura de dimensiones, equilibrio entre las 19 tecnicaturas y posibles sesgos de formulación o puntuación.
+- [x] Documentar los criterios metodológicos y los ajustes propuestos para armonizar el cuestionario.
+- [x] Implementar transiciones suaves, interrumpibles y respetuosas de reducción de movimiento al responder.
+- [x] Aplicar solo los ajustes de preguntas o ponderaciones que mejoren la discriminación y el equilibrio del test.
+- [x] Ampliar pruebas de regresión para neutralidad, cobertura de perfiles y transiciones de respuesta.
+- [x] Validar visualmente el flujo refinado en móvil y escritorio antes de publicar.
+- [x] Evitar recomendaciones arbitrarias y registros persistidos cuando todas las respuestas de afinidad sean neutrales.
+- [x] Revisar la distribución observada de afinidades y el tamaño efectivo de la muestra.
+- [x] Contrastar el patrón con la matriz de puntuación y la cobertura de las preguntas.
+- [x] Elaborar una interpretación prudente sobre preferencias reales, contexto de muestra y posibles sesgos.
+- [x] Redactar y entregar una conclusión breve basada en los 34 casos observados, con límites de muestra claros.
+- [x] Conservar la interpretación agregada en el registro de validación del proyecto.
+- [x] Inspeccionar la estructura, los tipos y la calidad de los campos del CSV exportado.
+- [x] Evaluar qué campos conviene usar o excluir en análisis y dashboards por privacidad.
+- [x] Entregar recomendaciones concretas de modelado y visualización para los datos exportados.
+- [x] Confirmar el informe de privacidad, modelado y visualización del CSV antes de su entrega.
+- [x] Definir columnas analíticas para las 14 respuestas y las 19 afinidades sin campos JSON embebidos.
+- [x] Implementar la exportación CSV tabular manteniendo la base de datos normalizada y los controles de contraseña.
+- [x] Probar que la exportación contiene valores, encabezados y codificación compatibles con Excel y herramientas de BI.
+- [x] Validar la descarga protegida y documentar el nuevo formato de análisis.
+- [x] Auditar el archivo CSV descargado por coordinación y explicar su estructura para análisis y dashboards; se detectó una reexportación que concentró el contenido en una sola columna.
+- [x] Rediseñar la descarga analítica para que Excel y las herramientas de BI reconozcan las 98 columnas sin una conversión manual.
+- [x] Validar el archivo descargado, el separador, la codificación y la protección por contraseña antes de publicar.
+- [x] Diseñar una revelación de resultado por capas con medalla institucional, trayectoria visual y destellos discretos.
+- [x] Animar de forma escalonada las tres afinidades, la comparación y el mensaje de orientación responsable.
+- [x] Validar la nueva animación en escritorio y móvil, respetando la preferencia de reducción de movimiento.
+- [x] Auditar la estructura, codificación, completitud y consistencia del CSV final de la exposición.
+- [x] Analizar distribuciones de participantes, respuestas, afinidades y versiones sin exponer datos personales.
+- [x] Documentar hallazgos, límites de interpretación y oportunidades de mejora sin modificar la aplicación.
+- [x] Incorporar una regresión básica que verifique la estructura de clases de la revelación animada del resultado.
+- [x] Revisar explícitamente la ruta de reducción de movimiento para confirmar que las animaciones decorativas se desactivan sin ocultar contenido.
+- [x] Analizar los resultados agregados y la comprensión lingüística de las 14 preguntas existentes.
+- [x] Proponer redacciones más simples y juveniles sin modificar preguntas, opciones, puntajes ni motor vocacional.
+- [x] Verificar si Museología y Museología y Gestión Patrimonial son tecnicaturas distintas en la oferta vigente del IES N.° 11; las fuentes públicas muestran una única oferta de Museología y no una segunda tecnicatura independiente.
+- [x] Aplicar redacción juvenil equivalente a las 14 preguntas y sus opciones, manteniendo identificadores, orden, ponderaciones y anclajes.
+- [x] Incorporar trazabilidad de la versión de cuestionario para separar redacción histórica y actual sin afectar la comparabilidad.
+- [x] Validar que la exportación CSV, los resultados y la analítica mantengan su contrato antes de publicar.
+- [x] Corregir el supuesto de 19 tecnicaturas tras la confirmación institucional de una oferta vigente de 18; se identificó que Museología y Museología y Gestión Patrimonial no deben coexistir como carreras activas.
+- [x] Comparar las 18 tecnicaturas vigentes confirmadas por el IES N.° 11 con el catálogo actual y localizar el perfil no vigente.
+- [x] Diseñar una corrección del catálogo que mantenga intactas las evaluaciones ya registradas, sus afinidades y el CSV histórico.
+- [x] Presentar el impacto de la corrección y solicitar aprobación antes de modificar perfiles, ponderaciones o resultados nuevos.
+- [x] Migrar las evaluaciones existentes al identificador de catálogo legado sin modificar sus resultados, respuestas ni afinidades.
+- [x] Activar el catálogo oficial de 18 tecnicaturas y retirar del cálculo nuevo el perfil duplicado de Museología y Gestión Patrimonial.
+- [x] Incorporar la versión de catálogo en el CSV y mantener vacía de forma explícita la afinidad 19 para registros nuevos.
+- [x] Separar o etiquetar la analítica por versión de catálogo para no mezclar rankings históricos y vigentes sin contexto.
+- [x] Validar la migración, el motor de afinidades, exportación, panel y regresiones antes de publicar.
+- [x] Auditar consistencia del catálogo, cuestionario, perfiles, resultados, base de datos y exportación CSV.
+- [x] Auditar flujos críticos, privacidad, controles administrativos y protección de datos personales.
+- [x] Auditar experiencia móvil, accesibilidad, rendimiento y presentación visual de inicio, test, resultado y panel.
+- [x] Documentar hallazgos, riesgos y oportunidades con prioridad, impacto y propuesta de solución, sin aplicar cambios aún.
+- [x] Versionar el texto exportado de cada respuesta para conservar fidelidad histórica por versión de cuestionario.
+- [x] Exigir un resguardo descargable y registrar una bitácora mínima antes de cualquier reinicio de datos.
+- [x] Limitar intentos de acciones protegidas y clasificar de manera explícita las versiones de catálogo no reconocidas.
+- [x] Retirar de forma no destructiva la columna heredada sin uso del CSV y del esquema persistido.
+- [x] Mejorar legibilidad móvil de consentimiento, QR y pie institucional, y reforzar la identidad visual de IES N.° 11.
+- [x] Elaborar una guía breve sobre cuestionario, RIASEC, anclajes y cálculo de afinidades para exposición docente.
+- [x] Validar datos, seguridad, interfaz y documentación antes de publicar.
+- [x] Crear una imagen institucional vertical con QR grande y las frases de acceso solicitadas.
+- [x] Verificar que la composición sea legible y que el QR dirija al sitio permanente antes de entregarla.
+- [x] Verificar si Turismo y Guía de Turismo son tecnicaturas distintas o una duplicación en el catálogo vigente; las fuentes públicas las confirman como tecnicaturas diferenciadas.
+- [x] Proponer una corrección compatible: no fusionar ni retirar carreras; reforzar sus perfiles comparativos para explicar sus salidas profesionales distintas si el IES lo aprueba.
+- [x] Reforzar la diferencia entre Turismo y Guía de Turismo en sus perfiles, sin cambiar catálogo, códigos ni puntajes.
+- [x] Mostrar una aclaración contextual en la comparación cuando Turismo y Guía de Turismo coincidan en el Top 3.
+- [x] Validar que resultados, CSV, analítica y registros históricos permanezcan idénticos.
+- [x] Definir métricas agregadas, comparables y seguras para el informe final institucional.
+- [x] Proponer una estructura de artículo técnico que documente objetivos, metodología, resultados y límites.
+- [x] Diseñar una estructura de repositorio reproducible sin datos personales ni secretos.
+- [x] Generar gráficos institucionales basados exclusivamente en resultados agregados del CSV final.
+- [x] Redactar y producir el informe institucional PDF para autoridades del IES N.° 11.
+- [x] Redactar el primer borrador del artículo técnico de la experiencia.
+- [x] Crear el README, documentos y estructura base del repositorio institucional privado.
+- [x] Verificar la calidad visual y la integridad de los entregables de cierre.
+- [x] Confirmar el esquema del CSV final y sus resguardos de privacidad para orientar el análisis en Gemini.
+- [x] Diseñar el flujo de limpieza, modelado, DAX y visualización en Power BI para el dataset final.
+- [x] Redactar un system prompt integral y contextualizado para la mentoría paso a paso en Gemini.
+- [x] Definir el alcance, los controles de privacidad y los recursos reutilizables de la habilidad de análisis institucional.
+- [x] Inicializar y redactar la habilidad con su flujo de auditoría, visualización, informe y documentación.
+- [x] Validar y entregar la habilidad instalable para reutilizarla en proyectos similares.
+- [x] Inspeccionar el archivo Power BI entregado y documentar sus páginas, modelo y medidas identificables.
+- [x] Revisar visualizaciones, controles de privacidad y trazabilidad de versiones del tablero.
+- [x] Entregar una evaluación priorizada del archivo Power BI con mejoras sugeridas.
+- [x] Definir un modelo de adopción replicable y los componentes configurables del test para otras instituciones.
+- [x] Diseñar lineamientos de catálogo, privacidad, seguridad y trazabilidad para cada implementación.
+- [x] Proponer un kit técnico-operativo y una ruta de despliegue institucional.
+- [x] Definir el alcance del cierre histórico, los activos a preservar y la política de no modificación.
+- [x] Congelar la instancia histórica, impedir nuevas respuestas y documentar su estado final verificable.
+- [x] Crear una copia o línea de trabajo independiente para mejoras futuras sin modificar el archivo histórico.
+- [x] Validar y documentar la separación entre archivo histórico y proyecto de evolución permanente.
+- [x] Extraer y verificar las 14 preguntas vigentes y sus opciones para el documento imprimible.
+- [x] Componer un PDF institucional con las preguntas y la alternativa neutral, sin puntajes internos.
+- [x] Revisar la legibilidad del PDF y entregarlo como material de consulta.
+- [x] Definir la arquitectura objetivo y los requisitos de migración independiente para el IES N.° 11.
+- [x] Redactar el README técnico detallado para instalación, configuración y despliegue fuera de Manus.
+- [x] Crear un diagrama visual de la arquitectura con GitHub, VPS, MySQL y dominio institucional.
+- [x] Preparar y generar una presentación ejecutiva para directivos sobre la migración y la operación permanente.
+- [x] Verificar y entregar el paquete completo de implementación institucional.
+- [x] Definir criterios de consolidación histórica para combinar los catálogos de 18 y 19 tecnicaturas sin alterar los registros.
+- [x] Incorporar una tercera opción de estadísticas consolidadas en el archivo histórico.
+- [x] Mostrar una advertencia metodológica visible sobre el perfil legado al usar la vista consolidada.
+- [x] Validar la vista combinada y publicar la actualización histórica.
+- [x] Definir qué código, documentación y configuraciones se copian o se excluyen del paquete de evolución.
+- [x] Crear una copia técnica aislada de la versión histórica para desarrollar la instancia permanente.
+- [x] Elaborar documentación de instalación, migración, configuración, seguridad e inventario del paquete.
+- [x] Generar y validar un ZIP autocontenido, sin datos personales, secretos ni dependencias reconstruibles.
+- [x] Preparar una guía simple para explicar la arquitectura y ejecución independiente a docentes y compañeros.
