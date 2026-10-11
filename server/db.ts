@@ -219,8 +219,20 @@ export async function deleteAllVocationalAssessments() {
   return Number(result[0].affectedRows ?? 0);
 }
 
-export async function recordVocationalAdminAction(action: string, outcome: "success" | "denied", metadata: Record<string, unknown>) {
+export async function recordVocationalAdminAction(
+  action: string,
+  outcome: "success" | "denied",
+  metadata: Record<string, unknown>,
+  ipAddress?: string | null,
+  actor?: string
+) {
   const db = await getDb();
   if (!db) return;
-  await db.insert(vocationalAdminActions).values({ action, outcome, metadata });
+  await db.insert(vocationalAdminActions).values({
+    action,
+    outcome,
+    metadata,
+    ipAddress: ipAddress ?? null,
+    actor: actor ?? "admin",
+  });
 }

@@ -30,12 +30,14 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     req: {
       protocol: "https",
       headers: {},
+      ip: "127.0.0.1",
     } as TrpcContext["req"],
     res: {
       clearCookie: (name: string, options: Record<string, unknown>) => {
         clearedCookies.push({ name, options });
       },
     } as TrpcContext["res"],
+    clientIp: "127.0.0.1",
   };
 
   return { ctx, clearedCookies };

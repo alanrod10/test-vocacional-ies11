@@ -48,9 +48,14 @@ export const vocationalAdminActions = mysqlTable("vocational_admin_actions", {
   id: int("id").autoincrement().primaryKey(),
   action: varchar("action", { length: 40 }).notNull(),
   outcome: varchar("outcome", { length: 24 }).notNull(),
+  actor: varchar("actor", { length: 64 }).default("admin").notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
   metadata: json("metadata").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+export type VocationalAdminAction = typeof vocationalAdminActions.$inferSelect;
+export type InsertVocationalAdminAction = typeof vocationalAdminActions.$inferInsert;
 
 export type VocationalAssessment = typeof vocationalAssessments.$inferSelect;
 export type InsertVocationalAssessment = typeof vocationalAssessments.$inferInsert;

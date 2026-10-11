@@ -47,9 +47,24 @@ function clearAdminRateLimit(request: Parameters<typeof clientKey>[0], action: s
   adminAttempts.delete(`${action}:${clientKey(request)}`);
 }
 
+function requireAdminPasswordConfigured(): string {
+  const password = process.env.ADMIN_ACTION_PASSWORD?.trim();
+  if (!password) {
+    throw new Error("[Seguridad] La variable de entorno ADMIN_ACTION_PASSWORD es obligatoria y no está configurada.");
+  }
+  return password;
+}
+
+function requireJwtSecret(): string {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret) {
+    throw new Error("[Seguridad] La variable de entorno JWT_SECRET es obligatoria y no está configurada.");
+  }
+  return secret;
+}
+
 function hasValidAdminPassword(password: string) {
-  const configuredPassword = process.env.ADMIN_ACTION_PASSWORD;
-  if (!configuredPassword) return false;
+  const configuredPassword = requireAdminPasswordConfigured();
   const provided = Buffer.from(password);
   const expected = Buffer.from(configuredPassword);
   return provided.length === expected.length && timingSafeEqual(provided, expected);
@@ -70,7 +85,7 @@ function requireOpenHistoricalArchive(action: "assessment" | "reset") {
 
 function createResetChallenge() {
   const payload = `${Date.now()}:${randomUUID()}`;
-  const signature = createHmac("sha256", process.env.JWT_SECRET ?? "missing-reset-secret")
+  const signature = createHmac("sha256", requireJwtSecret())
     .update(payload)
     .digest("base64url");
   return `${Buffer.from(payload).toString("base64url")}.${signature}`;
@@ -88,7 +103,7 @@ function isValidResetChallenge(challenge: string) {
   const [issuedAtText, nonce, extraPayload] = payload.split(":");
   const issuedAt = Number(issuedAtText);
   if (!issuedAt || !nonce || extraPayload || !Number.isFinite(issuedAt) || Date.now() - issuedAt > RESET_CHALLENGE_TTL_MS || issuedAt > Date.now() + 10_000) return false;
-  const expected = createHmac("sha256", process.env.JWT_SECRET ?? "missing-reset-secret").update(payload).digest("base64url");
+  const expected = createHmac("sha256", requireJwtSecret()).update(payload).digest("base64url");
   const receivedBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
   return receivedBuffer.length === expectedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer);
@@ -221,19 +236,31 @@ export const appRouter = router({
     analytics: publicProcedure.query(async () => calculateAnalytics(await listVocationalAssessments())),
     verifyAdminPassword: publicProcedure.input(z.object({ password: z.string().min(1).max(256) })).mutation(async ({ input, ctx }) => {
       enforceAdminRateLimit(ctx.req, "verify");
-      try { requireAdminPassword(input.password); } catch (error) { await recordVocationalAdminAction("verify", "denied", {}); throw error; }
+      const actor = ctx.user?.name || ctx.user?.openId || "admin";
+      try {
+        requireAdminPassword(input.password);
+      } catch (error) {
+        await recordVocationalAdminAction("verify", "denied", {}, ctx.clientIp, actor);
+        throw error;
+      }
       clearAdminRateLimit(ctx.req, "verify");
       return { authorized: true };
     }),
     exportCsv: publicProcedure.input(z.object({ password: z.string().min(1).max(256) })).mutation(async ({ input, ctx }) => {
       enforceAdminRateLimit(ctx.req, "export");
-      try { requireAdminPassword(input.password); } catch (error) { await recordVocationalAdminAction("export_csv", "denied", {}); throw error; }
+      const actor = ctx.user?.name || ctx.user?.openId || "admin";
+      try {
+        requireAdminPassword(input.password);
+      } catch (error) {
+        await recordVocationalAdminAction("export_csv", "denied", {}, ctx.clientIp, actor);
+        throw error;
+      }
       clearAdminRateLimit(ctx.req, "export");
       const rows = await listVocationalAssessments();
       const content = buildVocationalCsv(rows);
       const backupReceipt = randomUUID();
       backupReceipts.set(backupReceipt, { expiresAt: Date.now() + BACKUP_RECEIPT_TTL_MS, recordCount: rows.length });
-      await recordVocationalAdminAction("export_csv", "success", { recordCount: rows.length });
+      await recordVocationalAdminAction("export_csv", "success", { recordCount: rows.length }, ctx.clientIp, actor);
       return {
         content,
         filename: `resultados-vocacional-ies11-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -247,7 +274,13 @@ export const appRouter = router({
     reset: publicProcedure.input(z.object({ challenge: z.string().min(20).max(500), password: z.string().min(1).max(256), backupReceipt: z.string().uuid() })).mutation(async ({ input, ctx }) => {
       requireOpenHistoricalArchive("reset");
       enforceAdminRateLimit(ctx.req, "reset");
-      try { requireAdminPassword(input.password); } catch (error) { await recordVocationalAdminAction("reset", "denied", {}); throw error; }
+      const actor = ctx.user?.name || ctx.user?.openId || "admin";
+      try {
+        requireAdminPassword(input.password);
+      } catch (error) {
+        await recordVocationalAdminAction("reset", "denied", {}, ctx.clientIp, actor);
+        throw error;
+      }
       clearAdminRateLimit(ctx.req, "reset");
       if (!isValidResetChallenge(input.challenge)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "La confirmación de reinicio venció o no es válida." });
@@ -256,7 +289,7 @@ export const appRouter = router({
       if (!backup || backup.expiresAt < Date.now()) throw new TRPCError({ code: "BAD_REQUEST", message: "Antes de reiniciar necesitás descargar una copia reciente del CSV." });
       backupReceipts.delete(input.backupReceipt);
       const deleted = await deleteAllVocationalAssessments();
-      await recordVocationalAdminAction("reset", "success", { deleted, backupRecordCount: backup.recordCount });
+      await recordVocationalAdminAction("reset", "success", { deleted, backupRecordCount: backup.recordCount }, ctx.clientIp, actor);
       return { deleted };
     }),
   }),

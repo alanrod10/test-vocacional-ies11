@@ -21,7 +21,7 @@ vi.mock("./db", async (importOriginal) => {
 import { appRouter } from "./routers";
 
 function publicContext() {
-  return { user: null, req: { protocol: "https", headers: {} }, res: {} } as TrpcContext;
+  return { user: null, req: { protocol: "https", headers: {}, ip: "127.0.0.1" }, res: {}, clientIp: "127.0.0.1" } as TrpcContext;
 }
 
 function exampleAssessment() {

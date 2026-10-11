@@ -21,7 +21,7 @@ import { appRouter } from "./routers";
 import { CATALOG_VERSION, QUESTIONNAIRE_VERSION, QUESTIONS, scoreSelections } from "../shared/vocational";
 
 function publicContext() {
-  return { user: null, req: { protocol: "https", headers: {} }, res: {} } as TrpcContext;
+  return { user: null, req: { protocol: "https", headers: {}, ip: "127.0.0.1" }, res: {}, clientIp: "127.0.0.1" } as TrpcContext;
 }
 
 function parseQuotedCsvRow(row: string, delimiter = ";") {
@@ -64,16 +64,18 @@ const validInput = {
 function adminContext() {
   return {
     user: { id: 1, openId: "coordinacion-ies11", name: "Coordinación", email: null, loginMethod: "oauth", role: "admin", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
-    req: { protocol: "https", headers: {} },
+    req: { protocol: "https", headers: {}, ip: "127.0.0.1" },
     res: {},
+    clientIp: "127.0.0.1",
   } as TrpcContext;
 }
 
 function userContext() {
   return {
     user: { id: 2, openId: "visitante-ies11", name: "Visitante", email: null, loginMethod: "oauth", role: "user", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
-    req: { protocol: "https", headers: {} },
+    req: { protocol: "https", headers: {}, ip: "127.0.0.1" },
     res: {},
+    clientIp: "127.0.0.1",
   } as TrpcContext;
 }
 

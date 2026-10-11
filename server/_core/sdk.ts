@@ -27,7 +27,10 @@ class AuthService {
   }
 
   private getSessionSecret() {
-    const secret = ENV.cookieSecret || "fallback-secret-for-dev";
+    const secret = ENV.cookieSecret?.trim();
+    if (!secret) {
+      throw new Error("[Seguridad] La variable de entorno JWT_SECRET es obligatoria y no está configurada.");
+    }
     return new TextEncoder().encode(secret);
   }
 
