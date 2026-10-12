@@ -21,6 +21,23 @@ Al iniciar el servidor, la función [`seedInitialAdminUser`](file:///mnt/c/Proye
 
 Una vez sembrado el primer usuario, se recomienda cambiar la contraseña o crear usuarios específicos para el personal asignado.
 
+### 1.3. Matriz de Variables de Entorno Obligatorias y Opcionales
+El archivo [`.env.example`](file:///mnt/c/Proyecto%20Test%20Vocacional%20IES%2011/Test_Vocacional_IES11_Paquete_Completo_v1.0.0/.env.example) en la raíz del proyecto sirve de plantilla obligatoria. Las variables y su criticidad en producción son:
+
+| Variable | Tipo | Requerida | Propósito y Recomendación en VPS |
+|---|---|:---:|---|
+| `DATABASE_URL` | Secreto | **Sí** | Cadena de conexión MySQL/MariaDB (`mysql://user:pass@host:3306/db`). |
+| `JWT_SECRET` | Secreto | **Sí** | Clave criptográfica para firma de tokens JWT y desafíos HMAC. Generar con `openssl rand -hex 32`. |
+| `ADMIN_ACTION_PASSWORD` | Secreto | **Sí** | Contraseña maestra para acciones destructivas o de coordinación (reinicio/exportación). |
+| `ADMIN_INITIAL_USER` | Config | No | Nombre de usuario inicial para la base de datos (por defecto: `admin`). |
+| `ADMIN_INITIAL_PASSWORD` | Secreto | No | Contraseña inicial del administrador. Si se omite, hereda `ADMIN_ACTION_PASSWORD`. |
+| `INSTANCE_MODE` | Config | **Sí** | `'permanent'` (acepta envíos) o `'historical'` (modo museo/archivo Expo 2026). |
+| `VITE_INSTANCE_MODE` | Config | **Sí** | Idéntico a `INSTANCE_MODE` para inyección en cliente Vite. |
+| `APP_URL` | Config | **Sí** | URL pública canónica (ej. `https://testvocacional.ies11.edu.ar`). Usada en CORS y códigos QR. |
+| `ALLOWED_ORIGINS` | Config | No | Dominios adicionales permitidos para solicitudes cross-origin (separados por coma). |
+| `PORT` | Config | No | Puerto de escucha HTTP del servicio Node.js (por defecto: `3000`). |
+| `NODE_ENV` | Config | **Sí** | Debe fijarse en `'production'` para activar optimizaciones y cookies seguras. |
+
 ---
 
 ## 2. Gestión de Accesos y Roles Administrativos
@@ -96,6 +113,6 @@ Para iniciar un nuevo ciclo lectivo o limpiar datos de prueba antes de un evento
 | Síntoma | Causa Probable | Solución |
 |---|---|---|
 | Error `ECONNREFUSED 127.0.0.1:3306` | El servicio MySQL no está iniciado o la variable `DATABASE_URL` es incorrecta. | Verificar estado con `systemctl status mysql` y comprobar credenciales en `.env`. |
-| Error `UNAUTHORIZED` en `/admin/dashboard` | La cookie de sesión `ies11_admin_token` expiró o la clave `ADMIN_JWT_SECRET` fue modificada. | Iniciar sesión nuevamente en `/admin/login`. |
+| Error `UNAUTHORIZED` en `/admin/dashboard` | La cookie de sesión `ies11_admin_token` expiró o la clave `JWT_SECRET` fue modificada. | Iniciar sesión nuevamente en `/admin/login`. |
 | Fallo en descarga de PDF en teléfonos móviles antiguos | El navegador bloqueó pop-ups o no soporta dynamic import. | Habilitar ventanas emergentes en el navegador móvil y verificar conexión estable. |
 | Gráficos con categorías agrupadas en "Otros" | Regla de supresión de privacidad ($N < 3$). | Comportamiento esperado por diseño metodológico para resguardar la identidad de los participantes. |
