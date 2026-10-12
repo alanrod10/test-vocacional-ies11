@@ -7,3 +7,11 @@ export function buildSocialCardSummary(graduateRole: string, maxLength = 250) {
   const shortened = firstSentence.slice(0, maxLength - 1);
   return `${shortened.slice(0, shortened.lastIndexOf(" ")).trim()}…`;
 }
+
+/**
+ * Retorna la etiqueta descriptiva de afinidad para la tarjeta social,
+ * visibilizando empates en la afinidad principal sin mostrar puntajes crudos.
+ */
+export function buildSocialCardAffinityCaption(band: string, isTie?: boolean) {
+  return isTie ? `${band} · Empate en 1.er lugar` : band;
+}

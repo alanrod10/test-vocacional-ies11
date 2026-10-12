@@ -1,4 +1,5 @@
 import { INSTITUTION_INFO, type ProgramProfile } from "@shared/vocational";
+import { detectTies, getAffinityBand } from "./affinityBands";
 
 type RankingItem = { program: string; score: number; area: string };
 
@@ -75,9 +76,13 @@ export async function downloadVocationalReport(report: VocationalReport) {
   addText(`Edad: ${report.participant.age} años`);
   addText(`Fecha de emisión: ${new Date().toLocaleDateString("es-AR", { dateStyle: "long" })}`);
 
+  const ties = detectTies(report.topThree);
+  const winnerTie = ties[0] && report.topThree[0]?.score === report.topThree[1]?.score;
+  const winnerTieNote = winnerTie ? " · [Empate en 1.er lugar]" : "";
+
   addTitle("Resultado de afinidad");
   addText(report.winner.program.replace("TS en ", ""), true);
-  addText(`Área vocacional: ${report.winner.area} · Afinidad exploratoria: ${report.winner.score}/100.`);
+  addText(`Área vocacional: ${report.winner.area} · Nivel: ${getAffinityBand(report.winner.score)}${winnerTieNote}.`);
   addText(report.profile.profile);
 
   addTitle("Perfil profesional ampliado");
@@ -94,7 +99,13 @@ export async function downloadVocationalReport(report: VocationalReport) {
   addText(report.profile.field);
 
   addTitle("Top 3 afinidades");
-  report.topThree.forEach((item, index) => addText(`${index + 1}. ${item.program.replace("TS en ", "")} · ${item.score}/100 · ${item.area}`));
+  report.topThree.forEach((item, index) => {
+    const tieTag = ties[index] ? " · [Empate]" : "";
+    addText(`${index + 1}. ${item.program.replace("TS en ", "")} · ${getAffinityBand(item.score)}${tieTag} · ${item.area}`);
+  });
+  if (ties.some(Boolean)) {
+    addText("Nota sobre empates: Las tecnicaturas señaladas con [Empate] obtuvieron el mismo nivel de afinidad según tus respuestas; el orden de presentación es alfabético.");
+  }
 
   addTitle("Información institucional");
   addText(`${INSTITUTION_INFO.name}. ${INSTITUTION_INFO.offer}`);
