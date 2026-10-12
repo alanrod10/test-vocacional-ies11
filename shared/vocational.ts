@@ -197,12 +197,17 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
     "TS en Acompañamiento Terapéutico",
     "pendiente_de_modelado",
     "Salud y Bienestar",
-    V({ S: 5, I: 2, A: 1, C: 1 }),
-    "Integra el sostenimiento cotidiano, la revinculación social y el fortalecimiento de la autonomía de personas en situaciones de vulnerabilidad o tratamientos de salud.",
-    "Al finalizar, podrías colaborar en equipos interdisciplinarios facilitando la contención, la autonomía y la participación en el entorno cotidiano e institucional.",
-    ["Salud mental comunitaria", "Psicopatología y vínculos", "Estrategias de acompañamiento"],
-    ["Acompañar actividades cotidianas y promover la autonomía.", "Coordinar observaciones y registros con el equipo tratante.", "Intervenir en situaciones de contención emocional y revinculación social."],
-    "Centros de salud mental, instituciones educativas, dispositivos comunitarios y acompañamiento domiciliario en Jujuy y el NOA.",
+    V({ R: 1, I: 3, A: 2, S: 5, E: 1, C: 2 }),
+    "Brinda sostén emocional, revinculación comunitaria y asistencia en la cotidianeidad a personas en situaciones de vulnerabilidad, salud mental o tratamientos médicos, promoviendo su autonomía y dignidad.",
+    "Al finalizar, podrías desempeñarte como agente de salud en equipos interdisciplinarios de salud mental y clínica, implementando estrategias de acompañamiento terapéutico cotidiano, contención subjetiva y reinserción social bajo supervisión profesional.",
+    ["Psicopatología y Salud Mental", "Modelos y Técnicas de Acompañamiento Terapéutico", "Ética y Deontología Profesional", "Práctica Profesionalizante e Intervención Comunitaria"],
+    [
+      "Acompañar en la cotidianeidad a personas en tratamiento, facilitando su autonomía y revinculación vincular.",
+      "Articular y reportar observaciones en equipos interdisciplinarios con psicólogos, psiquiatras y trabajadores sociales.",
+      "Diseñar estrategias lúdicas, expresivas y de contención en situaciones de crisis o aislamiento.",
+      "Llevar registros de campo y bitácoras de seguimiento respetando el secreto profesional y el encuadre ético.",
+    ],
+    "Dispositivos de salud mental, hospitales de día, instituciones educativas, centros de rehabilitación, dispositivos comunitarios y atención domiciliaria en Jujuy y el NOA.",
   ),
   P(
     "ts_ciencias_datos_ia",
@@ -356,6 +361,12 @@ export const PROGRAM_BY_NAME: Record<string, ProgramDefinition> = Object.fromEnt
 export const ACTIVE_PROGRAMS = PROGRAM_CATALOG.filter((p) => p.status === "activa");
 export const ACTIVE_PROGRAM_IDS = ACTIVE_PROGRAMS.map((p) => p.id);
 export const ACTIVE_PROGRAM_NAMES = ACTIVE_PROGRAMS.map((p) => p.name);
+
+export const CANDIDATE_V2_PROGRAMS = PROGRAM_CATALOG.filter(
+  (p) => p.status === "activa" || p.id === "ts_acompanamiento_terapeutico",
+);
+export const CANDIDATE_V2_PROGRAM_IDS = CANDIDATE_V2_PROGRAMS.map((p) => p.id);
+export const CANDIDATE_V2_PROGRAM_NAMES = CANDIDATE_V2_PROGRAMS.map((p) => p.name);
 
 export const PROGRAMS: Record<string, ProgramProfile> = Object.fromEntries(ACTIVE_PROGRAMS.map((p) => [p.name, p]));
 export const PROGRAM_NAMES = ACTIVE_PROGRAM_NAMES;
@@ -815,6 +826,171 @@ export function scoreSelections(selections: Record<string, string> | number[]) {
     const sim = similarity(interests, program.interests);
     const anchorScore = anchors[program.id] ?? 0;
     const score = Math.round(sim * 0.55 + anchorScore * 0.45);
+    return {
+      id: program.id,
+      program: program.name,
+      score,
+      area: program.area,
+    };
+  }).sort((a, b) => b.score - a.score || a.program.localeCompare(b.program));
+}
+
+// ============================================================================
+// BORRADOR DEL INSTRUMENTO V2 (36 ÍTEMS RIASEC) Y MOTOR DE SIMILITUD PURA
+// ============================================================================
+
+const makeV2Question = (
+  id: string,
+  numericId: number,
+  dim: InterestKey,
+  icon: string,
+  prompt: string,
+): TestQuestion => ({
+  id,
+  numericId,
+  icon,
+  prompt,
+  mode: "choice",
+  options: [
+    {
+      id: "opt_like",
+      label: "Me interesa / Me gustaría",
+      interests: V({ [dim]: 1 }),
+    },
+    {
+      id: "opt_neutral",
+      label: "Neutral / Indiferente",
+      interests: V({}),
+      neutral: true,
+    },
+    {
+      id: "opt_dislike",
+      label: "No me interesa / Desagrada",
+      interests: V({}),
+    },
+  ],
+});
+
+export const QUESTIONS_V2: TestQuestion[] = [
+  // --- Dimensión R: Realista (q_r1 a q_r6) ---
+  makeV2Question("q_r1", 1, "R", "⚙️", "Montar y calibrar paneles solares o equipos electromecánicos de energía sustentable."),
+  makeV2Question("q_r2", 2, "R", "🔧", "Reparar herramientas mecánicas, instalaciones eléctricas o dispositivos físicos de trabajo."),
+  makeV2Question("q_r3", 3, "R", "🏭", "Operar maquinarias industriales y supervisar líneas técnicas de producción y elaboración."),
+  makeV2Question("q_r4", 4, "R", "🔬", "Manipular instrumental técnico y muestras físicas en un taller o laboratorio de control."),
+  makeV2Question("q_r5", 5, "R", "📐", "Realizar mediciones técnicas, planos de obra e inspecciones de seguridad en terreno."),
+  makeV2Question("q_r6", 6, "R", "🛠️", "Construir prototipos manuales o ensamblar piezas técnicas con precisión física y motriz."),
+
+  // --- Dimensión I: Investigativo (q_i1 a q_i6) ---
+  makeV2Question("q_i1", 7, "I", "📊", "Analizar patrones en grandes volúmenes de datos para predecir tendencias o comportamientos."),
+  makeV2Question("q_i2", 8, "I", "🧬", "Investigar causas biológicas, químicas o ambientales de un fenómeno ecológico o sanitario."),
+  makeV2Question("q_i3", 9, "I", "💻", "Programar algoritmos y modelos lógicos para automatizar la resolución de problemas técnicos."),
+  makeV2Question("q_i4", 10, "I", "🔍", "Estudiar publicaciones científicas y recopilar evidencia para resolver una hipótesis técnica."),
+  makeV2Question("q_i5", 11, "I", "🧪", "Diseñar experimentos o análisis de laboratorio para evaluar la composición de un producto o alimento."),
+  makeV2Question("q_i6", 12, "I", "📈", "Interpretar métricas complejas, indicadores demográficos y estadísticas epidemiológicas."),
+
+  // --- Dimensión A: Artístico (q_a1 a q_a6) ---
+  makeV2Question("q_a1", 13, "A", "🎨", "Diseñar prendas, estampados o colecciones textiles combinando técnicas andinas y diseño contemporáneo."),
+  makeV2Question("q_a2", 14, "A", "🏛️", "Idear la ambientación, guion museográfico y recorrido visual de una exhibición cultural."),
+  makeV2Question("q_a3", 15, "A", "🍲", "Crear recetas gastronómicas innovadoras integrando texturas, sabores e identidad regional."),
+  makeV2Question("q_a4", 16, "A", "✨", "Diseñar la identidad visual, paleta cromática y piezas gráficas para comunicar una experiencia o marca."),
+  makeV2Question("q_a5", 17, "A", "🎭", "Desarrollar propuestas lúdicas, expresivas o talleres creativos como medio de expresión subjetiva."),
+  makeV2Question("q_a6", 18, "A", "📜", "Elaborar relatos visuales y narrativas culturales para poner en valor el patrimonio histórico."),
+
+  // --- Dimensión S: Social (q_s1 a q_s6) ---
+  makeV2Question("q_s1", 19, "S", "🤝", "Acompañar y brindar contención emocional cotidiana a personas en situaciones de vulnerabilidad o crisis."),
+  makeV2Question("q_s2", 20, "S", "🩺", "Enseñar pautas de cuidado integral y hábitos saludables en talleres comunitarios o barriales."),
+  makeV2Question("q_s3", 21, "S", "❤️", "Brindar asistencia directa y cotidiana a personas mayores o pacientes en su proceso de rehabilitación."),
+  makeV2Question("q_s4", 22, "S", "💬", "Escuchar activamente a una persona para entender sus necesidades y ayudarla a fortalecer sus vínculos."),
+  makeV2Question("q_s5", 23, "S", "👥", "Mediar en conflictos grupales y promover la integración social en dispositivos comunitarios."),
+  makeV2Question("q_s6", 24, "S", "🏡", "Orientar y acompañar a familias que atraviesan dificultades de salud mental o problemáticas sociales."),
+
+  // --- Dimensión E: Emprendedor (q_e1 a q_e6) ---
+  makeV2Question("q_e1", 25, "E", "🚀", "Impulsar un nuevo emprendimiento o proyecto productivo, coordinando equipo y recursos."),
+  makeV2Question("q_e2", 26, "E", "🗺️", "Promover circuitos turísticos regionales negociando acuerdos con operadores y prestadores locales."),
+  makeV2Question("q_e3", 27, "E", "🤝", "Negociar alianzas comerciales y defender propuestas estratégicas ante decisores institucionales."),
+  makeV2Question("q_e4", 28, "E", "💼", "Coordinar y motivar equipos de trabajo para alcanzar metas operativas y comerciales en una organización."),
+  makeV2Question("q_e5", 29, "E", "📢", "Organizar eventos masivos, ferias o encuentros promocionales para captar nuevos públicos o clientes."),
+  makeV2Question("q_e6", 30, "E", "🎯", "Liderar iniciativas de modernización y optimización de procesos y servicios dentro de una entidad."),
+
+  // --- Dimensión C: Convencional (q_c1 a q_c6) ---
+  makeV2Question("q_c1", 31, "C", "📁", "Clasificar, archivar y mantener al día registros clínicos o expedientes administrativos con confidencialidad."),
+  makeV2Question("q_c2", 32, "C", "📋", "Verificar que las condiciones laborales y operativas cumplan estrictamente las normas legales y de higiene."),
+  makeV2Question("q_c3", 33, "C", "📅", "Elaborar cronogramas detallados de trabajo, presupuestos y control de inventarios de insumos y recursos."),
+  makeV2Question("q_c4", 34, "C", "📑", "Documentar procedimientos técnicos paso a paso y auditar protocolos de control de calidad."),
+  makeV2Question("q_c5", 35, "C", "📊", "Estructurar bases de datos y auditar la consistencia de registros digitales y planillas de cálculo."),
+  makeV2Question("q_c6", 36, "C", "🏢", "Gestionar la logística y administración de turnos, agendas y suministros en un centro de atención o salud."),
+];
+
+export function normalizeSelectionsV2(selections: Record<string, string> | number[]): Record<string, string> {
+  if (Array.isArray(selections)) {
+    const record: Record<string, string> = {};
+    QUESTIONS_V2.forEach((question, index) => {
+      const optionIndex = selections[index];
+      if (typeof optionIndex === "number" && question.options[optionIndex]) {
+        record[question.id] = question.options[optionIndex].id;
+      }
+    });
+    return record;
+  }
+  return { ...selections };
+}
+
+export function getInterestProfileV2(selections: Record<string, string> | number[]): InterestVector {
+  const norm = normalizeSelectionsV2(selections);
+  const profile = V({});
+  QUESTIONS_V2.forEach((question) => {
+    const optionId = norm[question.id];
+    if (!optionId) return;
+    const option = question.options.find((opt) => opt.id === optionId);
+    if (option) {
+      INTEREST_KEYS.forEach((key) => {
+        profile[key] += option.interests[key];
+      });
+    }
+  });
+  return profile;
+}
+
+export function hasScorableSignalV2(selections: Record<string, string> | number[]): boolean {
+  const norm = normalizeSelectionsV2(selections);
+  return QUESTIONS_V2.some((question) => {
+    const optionId = norm[question.id];
+    if (!optionId) return false;
+    const option = question.options.find((opt) => opt.id === optionId);
+    return Boolean(option && !option.neutral && option.id === "opt_like");
+  });
+}
+
+export function similarityCosine(a: InterestVector, b: InterestVector): number {
+  const dot = INTEREST_KEYS.reduce((sum, key) => sum + a[key] * b[key], 0);
+  const normA = Math.sqrt(INTEREST_KEYS.reduce((sum, key) => sum + a[key] ** 2, 0));
+  const normB = Math.sqrt(INTEREST_KEYS.reduce((sum, key) => sum + b[key] ** 2, 0));
+  const cosine = normA && normB ? dot / (normA * normB) : 0;
+  return Math.round(Math.max(0, Math.min(100, cosine * 100)));
+}
+
+export function similarityHybrid(a: InterestVector, b: InterestVector): number {
+  const left = normalize(a);
+  const right = normalize(b);
+  const distance = INTEREST_KEYS.reduce((sum, key) => sum + Math.abs(left[key] - right[key]), 0) / 2;
+  const dot = INTEREST_KEYS.reduce((sum, key) => sum + left[key] * right[key], 0);
+  const normA = Math.sqrt(INTEREST_KEYS.reduce((sum, key) => sum + left[key] ** 2, 0));
+  const normB = Math.sqrt(INTEREST_KEYS.reduce((sum, key) => sum + right[key] ** 2, 0));
+  const cosine = normA && normB ? dot / (normA * normB) : 0;
+  return Math.round(Math.max(0, Math.min(100, ((1 - distance) * 0.6 + cosine * 0.4) * 100)));
+}
+
+export function scoreSelectionsV2(
+  selections: Record<string, string> | number[],
+  options?: { similarityMethod?: "cosine" | "hybrid" },
+) {
+  const norm = normalizeSelectionsV2(selections);
+  const interests = getInterestProfileV2(norm);
+  const method = options?.similarityMethod ?? "cosine";
+  const simFn = method === "hybrid" ? similarityHybrid : similarityCosine;
+
+  return CANDIDATE_V2_PROGRAMS.map((program) => {
+    const score = simFn(interests, program.interests);
     return {
       id: program.id,
       program: program.name,
