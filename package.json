@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
-    "simulate-engine": "tsx scripts/simulateEngine.ts"
+    "simulate-engine": "tsx scripts/simulateEngine.ts",
+    "compare-engines": "tsx scripts/compareEngines.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
