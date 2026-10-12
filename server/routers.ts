@@ -6,7 +6,18 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { buildVocationalCsv, createVocationalAssessment, deleteAllVocationalAssessments, deleteVocationalAssessment, getAdminUserByUsername, listVocationalAssessments, recordVocationalAdminAction } from "./db";
+import {
+  buildVocationalCsv,
+  createVocationalAssessment,
+  deleteAllVocationalAssessments,
+  deleteVocationalAssessment,
+  getAdminUserByUsername,
+  getAggregatedAnalytics,
+  getDb,
+  listVocationalAssessments,
+  recordVocationalAdminAction,
+} from "./db";
+import { safeDistributionRecord } from "./privacySuppression";
 import { clearAdminCookie, setAdminCookie, signAdminToken } from "./_core/adminAuth";
 import { CATALOG_VERSION, ENGINE_VERSION, EXPO_CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_CATALOG, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, RETIRED_PROGRAM, getInterestProfile, hasScorableSignal, normalizeSelections, scoreSelections } from "../shared/vocational";
 import { HISTORICAL_ARCHIVE, HISTORICAL_ARCHIVE_MESSAGE } from "../shared/archive";
@@ -130,15 +141,12 @@ function isValidResetChallenge(challenge: string) {
   return receivedBuffer.length === expectedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer);
 }
 
-const MIN_PUBLIC_COUNT = 3;
-
-function safeDistribution(counts: Record<string, number>) {
-  return Object.entries(counts)
-    .filter(([, value]) => value >= MIN_PUBLIC_COUNT)
-    .map(([label, value]) => ({ label, value }));
-}
-
-function calculateCatalogAnalytics(rows: Awaited<ReturnType<typeof listVocationalAssessments>>, programNames: string[], programs: Record<string, { area: string }>) {
+function calculateCatalogAnalytics(
+  rows: Awaited<ReturnType<typeof listVocationalAssessments>>,
+  programNames: string[],
+  programs: Record<string, { area: string }>,
+  isConsolidated = false
+) {
   const total = rows.length;
   const programCounts = Object.fromEntries(programNames.map((program) => [program, 0])) as Record<string, number>;
   const topThreeCounts = Object.fromEntries(programNames.map((program) => [program, { first: 0, second: 0, third: 0, count: 0 }])) as Record<string, { first: number; second: number; third: number; count: number }>;
@@ -147,10 +155,12 @@ function calculateCatalogAnalytics(rows: Awaited<ReturnType<typeof listVocationa
   const ageGroups: Record<string, number> = { "<18": 0, "18–24": 0, "25–34": 0, "35+": 0 };
   const localityCounts: Record<string, number> = {};
   const educationCounts: Record<string, number> = {};
+  const studyIntentCounts: Record<string, number> = {};
+  let tieCount = 0;
 
   rows.forEach((row) => {
     programCounts[row.resultProgram] = (programCounts[row.resultProgram] ?? 0) + 1;
-    const storedTopThree = row.scoreSnapshot
+    const storedTopThree = (row.scoreSnapshot || [])
       .filter((item) => programNames.includes(item.program))
       .slice(0, 3);
     const placements = storedTopThree.length ? storedTopThree : [{ program: row.resultProgram, area: row.resultArea, score: 0 }];
@@ -162,10 +172,19 @@ function calculateCatalogAnalytics(rows: Awaited<ReturnType<typeof listVocationa
       if (index === 2) counts.third += 1;
       counts.count += 1;
     });
+
+    if (row.scoreSnapshot && row.scoreSnapshot.length >= 2 && row.scoreSnapshot[0].score === row.scoreSnapshot[1].score) {
+      tieCount += 1;
+    }
+
     areaCounts[row.resultArea] = (areaCounts[row.resultArea] ?? 0) + 1;
     sexCounts[row.sex] = (sexCounts[row.sex] ?? 0) + 1;
     localityCounts[row.locality] = (localityCounts[row.locality] ?? 0) + 1;
     educationCounts[row.educationStatus] = (educationCounts[row.educationStatus] ?? 0) + 1;
+    if (row.studyIntent) {
+      studyIntentCounts[row.studyIntent] = (studyIntentCounts[row.studyIntent] ?? 0) + 1;
+    }
+
     let group = "<18";
     if (typeof row.age === "number" && row.age > 0) {
       group = row.age < 18 ? "<18" : row.age <= 24 ? "18–24" : row.age <= 34 ? "25–34" : "35+";
@@ -181,33 +200,40 @@ function calculateCatalogAnalytics(rows: Awaited<ReturnType<typeof listVocationa
 
   const ranking = programNames.map((program) => ({
     program,
-    area: programs[program].area,
+    area: programs[program]?.area ?? "Otras",
     count: programCounts[program] ?? 0,
   })).sort((a, b) => b.count - a.count || a.program.localeCompare(b.program));
 
   const topThreeRanking = programNames.map((program) => ({
     program,
-    area: programs[program].area,
+    area: programs[program]?.area ?? "Otras",
     ...topThreeCounts[program],
   })).sort((a, b) => b.count - a.count || b.first - a.first || a.program.localeCompare(b.program));
 
   const rowsWithAge = rows.filter((r) => typeof r.age === "number" && r.age > 0);
+  const tieRate = total > 0 ? Number(((tieCount / total) * 100).toFixed(1)) : 0;
 
   return {
     total,
     averageAge: rowsWithAge.length ? Number((rowsWithAge.reduce((sum, row) => sum + row.age!, 0) / rowsWithAge.length).toFixed(1)) : 0,
+    tieCount,
+    tieRate,
     topProgram: ranking[0] ?? null,
     ranking,
     topThreeRanking,
-    areaDistribution: safeDistribution(areaCounts),
-    sexDistribution: safeDistribution(sexCounts),
-    ageDistribution: safeDistribution(ageGroups),
-    localityDistribution: safeDistribution(localityCounts),
-    educationDistribution: safeDistribution(educationCounts),
+    areaDistribution: Object.entries(areaCounts).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+    sexDistribution: safeDistributionRecord(sexCounts),
+    ageDistribution: safeDistributionRecord(ageGroups),
+    localityDistribution: safeDistributionRecord(localityCounts),
+    educationDistribution: safeDistributionRecord(educationCounts),
+    studyIntentDistribution: safeDistributionRecord(studyIntentCounts),
   };
 }
 
-export function calculateAnalytics(rows: Awaited<ReturnType<typeof listVocationalAssessments>>) {
+export function calculateAnalytics(
+  rows: Awaited<ReturnType<typeof listVocationalAssessments>>,
+  catalogVersionFilter?: string
+) {
   const legacyRows = rows.filter((row) => row.catalogVersion === LEGACY_CATALOG_VERSION);
   const expo18Programs = PROGRAM_CATALOG.filter((p) => p.name !== RETIRED_PROGRAM && p.name !== "TS en Acompañamiento Terapéutico");
   const expo18ProgramNames = expo18Programs.map((p) => p.name);
@@ -249,11 +275,12 @@ export function calculateAnalytics(rows: Awaited<ReturnType<typeof listVocationa
       label: "Consolidado histórico (17 + 18 + 19 TS)",
       programCount: consolidatedProgramNames.length,
       isConsolidated: true,
-      ...calculateCatalogAnalytics(recognizedRows, consolidatedProgramNames, consolidatedPrograms),
+      ...calculateCatalogAnalytics(recognizedRows, consolidatedProgramNames, consolidatedPrograms, true),
     },
   ];
 
   const active =
+    (catalogVersionFilter ? catalogViews.find((view) => view.version === catalogVersionFilter) : undefined) ??
     catalogViews.find((view) => view.version === CATALOG_VERSION && view.total > 0) ??
     catalogViews.find((view) => view.version === "2026.08-oficial-18" && view.total > 0) ??
     catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION) ??
@@ -361,7 +388,15 @@ export const appRouter = router({
       });
       return { id, winner, topThree: scores.slice(0, 3), interestProfile: getInterestProfile(normalizedSelections) };
     }),
-    analytics: viewerProcedure.query(async () => calculateAnalytics(await listVocationalAssessments())),
+    analytics: viewerProcedure
+      .input(z.object({ catalogVersion: z.string().optional() }).optional())
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (db) {
+          return getAggregatedAnalytics(input?.catalogVersion);
+        }
+        return calculateAnalytics(await listVocationalAssessments(), input?.catalogVersion);
+      }),
     deleteAssessment: adminProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ input, ctx }) => {

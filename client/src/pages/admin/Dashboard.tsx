@@ -21,6 +21,7 @@ import {
   Users,
   HeartPulse,
   Sparkles,
+  Award,
   LogOut,
   ArrowLeft,
   Loader2,
@@ -63,10 +64,15 @@ export default function AdminDashboard() {
     },
   });
 
-  const analytics = trpc.vocational.analytics.useQuery(undefined, {
-    enabled: !!meQuery.data,
-    refetchInterval: 30_000,
-  });
+  const [selectedCatalogVersion, setSelectedCatalogVersion] = useState<string | null>(null);
+
+  const analytics = trpc.vocational.analytics.useQuery(
+    selectedCatalogVersion ? { catalogVersion: selectedCatalogVersion } : undefined,
+    {
+      enabled: !!meQuery.data,
+      refetchInterval: 30_000,
+    }
+  );
 
   const exportCsv = trpc.vocational.exportCsv.useMutation();
   const createResetChallenge = trpc.vocational.createResetChallenge.useMutation();
@@ -89,8 +95,6 @@ export default function AdminDashboard() {
       toast.error(err.message || "Error al eliminar la evaluación.");
     },
   });
-
-  const [selectedCatalogVersion, setSelectedCatalogVersion] = useState<string | null>(null);
 
   // Redirigir al login si no está autenticado
   if (!meQuery.isLoading && !meQuery.data) {
@@ -383,12 +387,18 @@ export default function AdminDashboard() {
             </div>
 
             {/* Tarjetas KPI */}
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <KpiCard
                 label="Evaluaciones completadas"
                 value={analyticsView?.total ?? 0}
                 icon={<Users size={20} />}
                 tone="coral"
+              />
+              <KpiCard
+                label="Frecuencia de empates"
+                value={analyticsView?.total ? `${(analyticsView as any)?.tieRate ?? 0}% (${(analyticsView as any)?.tieCount ?? 0})` : "—"}
+                icon={<Award size={20} />}
+                tone="blue"
               />
               <KpiCard
                 label="Edad promedio"
@@ -522,11 +532,41 @@ export default function AdminDashboard() {
                   {/* Demográficos */}
                   <div className="rounded-[1.65rem] border border-white bg-white p-6 shadow-sm">
                     <h3 className="font-display text-lg font-extrabold text-[#102d54]">
+                      Grupos de Edad
+                    </h3>
+                    <p className="mb-3 text-xs font-semibold text-[#526064]">
+                      {hasSafeDemographicSample
+                        ? "Distribución por rangos etarios (S6: N<3 suprimido)"
+                        : "Requiere al menos 5 respuestas para proteger la privacidad"}
+                    </p>
+                    <SimpleBarsList
+                      data={ageData}
+                      colors={["#10a979", "#1976b7", "#f3a737", "#c55337"]}
+                    />
+                  </div>
+
+                  <div className="rounded-[1.65rem] border border-white bg-white p-6 shadow-sm">
+                    <h3 className="font-display text-lg font-extrabold text-[#102d54]">
+                      Identidad de Género / Sexo
+                    </h3>
+                    <p className="mb-3 text-xs font-semibold text-[#526064]">
+                      {hasSafeDemographicSample
+                        ? "Distribución por género (S6: N<3 suprimido)"
+                        : "Requiere al menos 5 respuestas"}
+                    </p>
+                    <SimpleBarsList
+                      data={sexData}
+                      colors={["#406bff", "#10a979", "#f3a737"]}
+                    />
+                  </div>
+
+                  <div className="rounded-[1.65rem] border border-white bg-white p-6 shadow-sm">
+                    <h3 className="font-display text-lg font-extrabold text-[#102d54]">
                       Situación Educativa
                     </h3>
                     <p className="mb-3 text-xs font-semibold text-[#526064]">
                       {hasSafeDemographicSample
-                        ? "Contexto de los participantes"
+                        ? "Contexto de los participantes (S6: N<3 suprimido)"
                         : "Requiere al menos 5 respuestas para proteger la privacidad"}
                     </p>
                     <SimpleBarsList
@@ -541,7 +581,7 @@ export default function AdminDashboard() {
                     </h3>
                     <p className="mb-3 text-xs font-semibold text-[#526064]">
                       {hasSafeDemographicSample
-                        ? "Distribución geográfica"
+                        ? "Distribución geográfica (S6: N<3 suprimido)"
                         : "Requiere al menos 5 respuestas"}
                     </p>
                     <SimpleBarsList

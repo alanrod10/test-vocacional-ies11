@@ -152,7 +152,7 @@ describe("motor vocacional", () => {
     expect(analytics.catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION)).toMatchObject({ total: 2, programCount: 19 });
     expect(analytics.catalogViews.find((view) => view.version === "2026.08-oficial-18")).toMatchObject({ total: 0, programCount: 18 });
     expect(analytics.catalogViews.find((view) => view.version === CATALOG_VERSION)).toMatchObject({ total: 1, programCount: 17, topProgram: { program: "TS en Enfermería", count: 1 } });
-    expect(analytics.catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION)?.localityDistribution).toEqual([]);
-    expect(analytics.catalogViews.find((view) => view.version === "2026.08-historico-consolidado")).toMatchObject({ total: 3, programCount: 19, isConsolidated: true, topProgram: { program: "TS en Desarrollo de Software", count: 2 }, localityDistribution: [] });
+    expect(analytics.catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION)?.localityDistribution).toEqual([{ label: "Otros / No revelado", value: 2 }]);
+    expect(analytics.catalogViews.find((view) => view.version === "2026.08-historico-consolidado")).toMatchObject({ total: 3, programCount: 19, isConsolidated: true, topProgram: { program: "TS en Desarrollo de Software", count: 2 }, localityDistribution: [{ label: "Otros / No revelado", value: 3 }] });
   });
 });

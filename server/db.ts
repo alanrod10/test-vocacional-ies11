@@ -1,8 +1,22 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import bcrypt from "bcryptjs";
 import { AdminUser, adminUsers, InsertAdminUser, InsertUser, vocationalAdminActions, vocationalAssessments, users } from "../drizzle/schema";
-import { getOptionLabelForQuestionnaireVersion, LEGACY_PROGRAM_NAMES, QUESTIONS, selectionsToIndices } from "../shared/vocational";
+import {
+  CATALOG_VERSION,
+  EXPO_CATALOG_VERSION,
+  getOptionLabelForQuestionnaireVersion,
+  LEGACY_CATALOG_VERSION,
+  LEGACY_PROGRAM_NAMES,
+  LEGACY_PROGRAMS,
+  PROGRAM_CATALOG,
+  PROGRAM_NAMES,
+  PROGRAMS,
+  QUESTIONS,
+  RETIRED_PROGRAM,
+  selectionsToIndices,
+} from "../shared/vocational";
+import { applyPrivacySuppression, DistributionItem } from "./privacySuppression";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -121,6 +135,376 @@ export async function listVocationalAssessments() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(vocationalAssessments).orderBy(desc(vocationalAssessments.createdAt));
+}
+
+export type AggregatedCatalogView = {
+  version: string;
+  label: string;
+  programCount: number;
+  isConsolidated?: boolean;
+  total: number;
+  averageAge: number;
+  tieCount: number;
+  tieRate: number;
+  topProgram: { program: string; count: number; area: string } | null;
+  ranking: { program: string; area: string; count: number }[];
+  topThreeRanking: { program: string; area: string; first: number; second: number; third: number; count: number }[];
+  areaDistribution: DistributionItem[];
+  sexDistribution: DistributionItem[];
+  ageDistribution: DistributionItem[];
+  localityDistribution: DistributionItem[];
+  educationDistribution: DistributionItem[];
+  studyIntentDistribution: DistributionItem[];
+};
+
+export type AggregatedAnalyticsResult = AggregatedCatalogView & {
+  totalAll: number;
+  catalogViews: AggregatedCatalogView[];
+  unknownCatalogTotal: number;
+  unknownCatalogVersions: string[];
+};
+
+function buildEmptyCatalogView(
+  version: string,
+  label: string,
+  programNames: string[],
+  programs: Record<string, { area: string }>,
+  isConsolidated = false
+): AggregatedCatalogView {
+  return {
+    version,
+    label,
+    programCount: programNames.length,
+    isConsolidated,
+    total: 0,
+    averageAge: 0,
+    tieCount: 0,
+    tieRate: 0,
+    topProgram: null,
+    ranking: programNames.map((program) => ({
+      program,
+      area: programs[program]?.area ?? "Otras",
+      count: 0,
+    })),
+    topThreeRanking: programNames.map((program) => ({
+      program,
+      area: programs[program]?.area ?? "Otras",
+      first: 0,
+      second: 0,
+      third: 0,
+      count: 0,
+    })),
+    areaDistribution: [],
+    sexDistribution: [],
+    ageDistribution: [],
+    localityDistribution: [],
+    educationDistribution: [],
+    studyIntentDistribution: [],
+  };
+}
+
+/**
+ * Consulta y agrupa las estadísticas analíticas directamente en el motor de base de datos SQL (Drizzle).
+ * No carga registros individuales ni datos PII en memoria RAM.
+ * Aplica supresión estricta de grupos menores a 3 con supresión complementaria (S6).
+ */
+export async function getAggregatedAnalytics(catalogVersionFilter?: string): Promise<AggregatedAnalyticsResult> {
+  const expo18Programs = PROGRAM_CATALOG.filter((p) => p.name !== RETIRED_PROGRAM && p.name !== "TS en Acompañamiento Terapéutico");
+  const expo18ProgramNames = expo18Programs.map((p) => p.name);
+  const expo18ProgramsRecord = Object.fromEntries(expo18Programs.map((p) => [p.name, p]));
+  const consolidatedProgramNames = Array.from(new Set([...LEGACY_PROGRAM_NAMES, ...PROGRAM_NAMES]));
+  const consolidatedPrograms = { ...LEGACY_PROGRAMS, ...PROGRAMS };
+
+  const emptyViews: AggregatedCatalogView[] = [
+    buildEmptyCatalogView(LEGACY_CATALOG_VERSION, "Catálogo histórico de 19 tecnicaturas", LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS),
+    buildEmptyCatalogView(EXPO_CATALOG_VERSION, "Oferta oficial Expo 2026 (18 tecnicaturas)", expo18ProgramNames, expo18ProgramsRecord),
+    buildEmptyCatalogView(CATALOG_VERSION, "Oferta oficial vigente de 17 tecnicaturas", PROGRAM_NAMES, PROGRAMS),
+    buildEmptyCatalogView("2026.08-historico-consolidado", "Consolidado histórico (17 + 18 + 19 TS)", consolidatedProgramNames, consolidatedPrograms, true),
+  ];
+
+  const db = await getDb();
+  if (!db) {
+    const active = (catalogVersionFilter ? emptyViews.find((v) => v.version === catalogVersionFilter) : undefined) ?? emptyViews[2] ?? emptyViews[0];
+    return {
+      ...active,
+      totalAll: 0,
+      catalogViews: emptyViews,
+      unknownCatalogTotal: 0,
+      unknownCatalogVersions: [],
+    };
+  }
+
+  try {
+    // 1. Totales y KPIs agrupados por versión de catálogo
+    const summaryRows = await db
+      .select({
+        catalogVersion: vocationalAssessments.catalogVersion,
+        total: sql<number>`count(*)`,
+        averageAge: sql<number>`coalesce(round(avg(case when ${vocationalAssessments.age} is not null and ${vocationalAssessments.age} > 0 then ${vocationalAssessments.age} else null end), 1), 0)`,
+        tieCount: sql<number>`coalesce(sum(case when json_extract(${vocationalAssessments.scoreSnapshot}, '$[0].score') = json_extract(${vocationalAssessments.scoreSnapshot}, '$[1].score') then 1 else 0 end), 0)`,
+      })
+      .from(vocationalAssessments)
+      .groupBy(vocationalAssessments.catalogVersion);
+
+  // 2. Ranking de programas (Top 1)
+  const programRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      program: vocationalAssessments.resultProgram,
+      area: vocationalAssessments.resultArea,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, vocationalAssessments.resultProgram, vocationalAssessments.resultArea);
+
+  // 3. Top 3 colocaciones
+  const firstRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      program: sql<string>`coalesce(json_unquote(json_extract(${vocationalAssessments.scoreSnapshot}, '$[0].program')), ${vocationalAssessments.resultProgram})`,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, sql`coalesce(json_unquote(json_extract(${vocationalAssessments.scoreSnapshot}, '$[0].program')), ${vocationalAssessments.resultProgram})`);
+
+  const secondRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      program: sql<string>`json_unquote(json_extract(${vocationalAssessments.scoreSnapshot}, '$[1].program'))`,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .where(sql`json_extract(${vocationalAssessments.scoreSnapshot}, '$[1].program') is not null`)
+    .groupBy(vocationalAssessments.catalogVersion, sql`json_unquote(json_extract(${vocationalAssessments.scoreSnapshot}, '$[1].program'))`);
+
+  const thirdRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      program: sql<string>`json_unquote(json_extract(${vocationalAssessments.scoreSnapshot}, '$[2].program'))`,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .where(sql`json_extract(${vocationalAssessments.scoreSnapshot}, '$[2].program') is not null`)
+    .groupBy(vocationalAssessments.catalogVersion, sql`json_unquote(json_extract(${vocationalAssessments.scoreSnapshot}, '$[2].program'))`);
+
+  // 4. Áreas
+  const areaRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      area: vocationalAssessments.resultArea,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, vocationalAssessments.resultArea);
+
+  // 5. Demografía: Sexo
+  const sexRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      sex: vocationalAssessments.sex,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, vocationalAssessments.sex);
+
+  // 6. Demografía: Grupos de Edad
+  const ageGroupExpr = sql<string>`case
+    when ${vocationalAssessments.age} is not null and ${vocationalAssessments.age} > 0 then
+      case
+        when ${vocationalAssessments.age} < 18 then '<18'
+        when ${vocationalAssessments.age} <= 24 then '18–24'
+        when ${vocationalAssessments.age} <= 34 then '25–34'
+        else '35+'
+      end
+    when ${vocationalAssessments.ageGroup} in ('13-15', '16-18') then '<18'
+    when ${vocationalAssessments.ageGroup} = '19-25' then '18–24'
+    when ${vocationalAssessments.ageGroup} = '26+' then '25–34'
+    else 'No informado'
+  end`;
+
+  const ageRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      ageGroup: ageGroupExpr,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, ageGroupExpr);
+
+  // 7. Demografía: Localidad
+  const localityRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      locality: vocationalAssessments.locality,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, vocationalAssessments.locality);
+
+  // 8. Demografía: Situación Educativa
+  const educationRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      educationStatus: vocationalAssessments.educationStatus,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, vocationalAssessments.educationStatus);
+
+  // 9. Intención de Estudio
+  const studyIntentRows = await db
+    .select({
+      catalogVersion: vocationalAssessments.catalogVersion,
+      studyIntent: vocationalAssessments.studyIntent,
+      count: sql<number>`count(*)`,
+    })
+    .from(vocationalAssessments)
+    .groupBy(vocationalAssessments.catalogVersion, vocationalAssessments.studyIntent);
+
+  const recognizedVersions = [LEGACY_CATALOG_VERSION, EXPO_CATALOG_VERSION, CATALOG_VERSION];
+  const totalAll = summaryRows.reduce((acc, row) => acc + Number(row.total || 0), 0);
+  const unknownRows = summaryRows.filter((r) => !recognizedVersions.includes(r.catalogVersion));
+  const unknownCatalogTotal = unknownRows.reduce((acc, r) => acc + Number(r.total || 0), 0);
+  const unknownCatalogVersions = Array.from(new Set(unknownRows.map((r) => r.catalogVersion)));
+
+  const buildCatalogView = (
+    version: string,
+    label: string,
+    programNames: string[],
+    programs: Record<string, { area: string }>,
+    versionFilter: (v: string) => boolean,
+    isConsolidated = false
+  ): AggregatedCatalogView => {
+    const matchingSummaries = summaryRows.filter((r) => versionFilter(r.catalogVersion));
+    const total = matchingSummaries.reduce((acc, r) => acc + Number(r.total || 0), 0);
+    const tieCount = matchingSummaries.reduce((acc, r) => acc + Number(r.tieCount || 0), 0);
+    const tieRate = total > 0 ? Number(((tieCount / total) * 100).toFixed(1)) : 0;
+
+    let averageAge = 0;
+    if (total > 0) {
+      const sumAge = matchingSummaries.reduce((acc, r) => acc + Number(r.averageAge || 0) * Number(r.total || 0), 0);
+      averageAge = Number((sumAge / total).toFixed(1));
+    }
+
+    const progCounts: Record<string, number> = {};
+    programRows
+      .filter((r) => versionFilter(r.catalogVersion))
+      .forEach((r) => {
+        progCounts[r.program] = (progCounts[r.program] || 0) + Number(r.count || 0);
+      });
+
+    const ranking = programNames
+      .map((program) => ({
+        program,
+        area: programs[program]?.area ?? "Otras",
+        count: progCounts[program] ?? 0,
+      }))
+      .sort((a, b) => b.count - a.count || a.program.localeCompare(b.program));
+
+    const firstCounts: Record<string, number> = {};
+    firstRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { firstCounts[r.program] = (firstCounts[r.program] || 0) + Number(r.count || 0); });
+    const secondCounts: Record<string, number> = {};
+    secondRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { secondCounts[r.program] = (secondCounts[r.program] || 0) + Number(r.count || 0); });
+    const thirdCounts: Record<string, number> = {};
+    thirdRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { thirdCounts[r.program] = (thirdCounts[r.program] || 0) + Number(r.count || 0); });
+
+    const topThreeRanking = programNames
+      .map((program) => {
+        const first = firstCounts[program] || 0;
+        const second = secondCounts[program] || 0;
+        const third = thirdCounts[program] || 0;
+        return {
+          program,
+          area: programs[program]?.area ?? "Otras",
+          first,
+          second,
+          third,
+          count: first + second + third,
+        };
+      })
+      .sort((a, b) => b.count - a.count || b.first - a.first || a.program.localeCompare(b.program));
+
+    const areaCounts: Record<string, number> = {};
+    areaRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { areaCounts[r.area] = (areaCounts[r.area] || 0) + Number(r.count || 0); });
+    const areaDistribution = Object.entries(areaCounts).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+
+    // Demográficos con Supresión Estricta N < 3 y Complementaria
+    const sexCounts: Record<string, number> = {};
+    sexRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { sexCounts[r.sex] = (sexCounts[r.sex] || 0) + Number(r.count || 0); });
+    const sexDistribution = applyPrivacySuppression(Object.entries(sexCounts).map(([label, value]) => ({ label, value })));
+
+    const ageCounts: Record<string, number> = {};
+    ageRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { ageCounts[r.ageGroup] = (ageCounts[r.ageGroup] || 0) + Number(r.count || 0); });
+    const ageDistribution = applyPrivacySuppression(Object.entries(ageCounts).map(([label, value]) => ({ label, value })));
+
+    const localityCounts: Record<string, number> = {};
+    localityRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { localityCounts[r.locality] = (localityCounts[r.locality] || 0) + Number(r.count || 0); });
+    const localityDistribution = applyPrivacySuppression(Object.entries(localityCounts).map(([label, value]) => ({ label, value })));
+
+    const educationCounts: Record<string, number> = {};
+    educationRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { educationCounts[r.educationStatus] = (educationCounts[r.educationStatus] || 0) + Number(r.count || 0); });
+    const educationDistribution = applyPrivacySuppression(Object.entries(educationCounts).map(([label, value]) => ({ label, value })));
+
+    const studyIntentCounts: Record<string, number> = {};
+    studyIntentRows.filter((r) => versionFilter(r.catalogVersion)).forEach((r) => { studyIntentCounts[r.studyIntent] = (studyIntentCounts[r.studyIntent] || 0) + Number(r.count || 0); });
+    const studyIntentDistribution = applyPrivacySuppression(Object.entries(studyIntentCounts).map(([label, value]) => ({ label, value })));
+
+    return {
+      version,
+      label,
+      programCount: programNames.length,
+      isConsolidated,
+      total,
+      averageAge,
+      tieCount,
+      tieRate,
+      topProgram: ranking[0] ?? null,
+      ranking,
+      topThreeRanking,
+      areaDistribution,
+      sexDistribution,
+      ageDistribution,
+      localityDistribution,
+      educationDistribution,
+      studyIntentDistribution,
+    };
+  };
+
+  const catalogViews: AggregatedCatalogView[] = [
+    buildCatalogView(LEGACY_CATALOG_VERSION, "Catálogo histórico de 19 tecnicaturas", LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, (v) => v === LEGACY_CATALOG_VERSION),
+    buildCatalogView(EXPO_CATALOG_VERSION, "Oferta oficial Expo 2026 (18 tecnicaturas)", expo18ProgramNames, expo18ProgramsRecord, (v) => v === EXPO_CATALOG_VERSION),
+    buildCatalogView(CATALOG_VERSION, "Oferta oficial vigente de 17 tecnicaturas", PROGRAM_NAMES, PROGRAMS, (v) => v === CATALOG_VERSION),
+    buildCatalogView("2026.08-historico-consolidado", "Consolidado histórico (17 + 18 + 19 TS)", consolidatedProgramNames, consolidatedPrograms, (v) => recognizedVersions.includes(v), true),
+  ];
+
+  const active =
+    (catalogVersionFilter ? catalogViews.find((v) => v.version === catalogVersionFilter) : undefined) ??
+    catalogViews.find((v) => v.version === CATALOG_VERSION && v.total > 0) ??
+    catalogViews.find((v) => v.version === EXPO_CATALOG_VERSION && v.total > 0) ??
+    catalogViews.find((v) => v.version === LEGACY_CATALOG_VERSION) ??
+    catalogViews[0];
+
+    return {
+      ...active,
+      totalAll,
+      catalogViews,
+      unknownCatalogTotal,
+      unknownCatalogVersions,
+    };
+  } catch (error) {
+    console.warn("[Database] Cannot execute aggregated analytics query (database unavailable or disconnected):", error);
+    const active =
+      (catalogVersionFilter ? emptyViews.find((v) => v.version === catalogVersionFilter) : undefined) ??
+      emptyViews[2] ??
+      emptyViews[0];
+    return {
+      ...active,
+      totalAll: 0,
+      catalogViews: emptyViews,
+      unknownCatalogTotal: 0,
+      unknownCatalogVersions: [],
+    };
+  }
 }
 
 function escapeCsv(value: unknown) {
