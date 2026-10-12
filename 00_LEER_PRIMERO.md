@@ -40,8 +40,8 @@ pnpm test
 pnpm build
 ```
 
-Para ejecutar la aplicación se requiere configurar una base compatible con MySQL y las variables de entorno documentadas. Antes de desplegar fuera de Manus, hay que desacoplar OAuth, almacenamiento y runtime específicos de Manus, tal como se explica en `docs/` y `EVOLUCION_PERMANENTE.md`.
+Para ejecutar la aplicación se requiere configurar una base compatible con MySQL y las variables de entorno documentadas en `.env.example`. La plataforma se encuentra completamente desacoplada y opera de forma autónoma (completada la migración fuera de dependencias de entornos externos como Manus), tal como se explica en `docs/` y `EVOLUCION_PERMANENTE.md`.
 
 ## Regla institucional esencial
 
-El archivo histórico de la Expo Educativa 2026 y la futura versión permanente deben permanecer separados. La nueva versión debe usar una base de datos, secretos, dominio y almacenamiento propios. El catálogo activo de la evolución permanente es el de **18 tecnicaturas oficiales**; la referencia de 19 tecnicaturas solo se conserva para interpretar registros históricos.
+El archivo histórico de la Expo Educativa 2026 y la versión permanente operan de forma separada. La nueva versión utiliza una base de datos, secretos, dominio y almacenamiento propios. El catálogo activo de la evolución permanente es el de **17 tecnicaturas oficiales vigentes** (`2026.10-oficial-17`), con *TS en Acompañamiento Terapéutico* en modelado; las referencias de 18 y 19 tecnicaturas se conservan exclusivamente para interpretar registros históricos.

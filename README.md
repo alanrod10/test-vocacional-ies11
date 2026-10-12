@@ -1,68 +1,143 @@
 # Test Vocacional IES N.° 11
 
-> **Estado actual: archivo histórico cerrado de la Expo Educativa 2026.** La instancia publicada conserva sus resultados en modo lectura y no acepta nuevas evaluaciones. Consultar [ARCHIVO_HISTORICO.md](./ARCHIVO_HISTORICO.md) y [EVOLUCION_PERMANENTE.md](./EVOLUCION_PERMANENTE.md) antes de realizar cambios.
+> **Plataforma de Orientación Vocacional Autónoma e Institucional.** Este repositorio contiene la aplicación web, el motor de afinidad vocacional y la documentación técnica del **Test Vocacional del Instituto de Educación Superior N.° 11** (San Salvador de Jujuy, Argentina).
 
-Este repositorio privado contiene el código, la documentación operativa y los procedimientos de análisis del **Test Vocacional IES N.° 11**, una aplicación web de orientación inicial utilizada en la Expo Educativa 2026. La solución ofrece un cuestionario de 14 situaciones, un ranking de tres afinidades, perfiles comparativos de tecnicaturas y un panel de datos que publica solo información agregada.
+La solución es una herramienta de orientación vocacional inicial (no clínica ni diagnóstica) diseñada para ayudar a postulantes y estudiantes a explorar las Tecnicaturas Superiores del instituto según sus intereses y preferencias situacionales. Opera de forma autónoma con un modelo de privacidad **Zero-PII** (cero datos personales identificatorios en base de datos), control de acceso administrativo basado en roles (`viewer` y `admin`), y exportación analítica dimensional compatible con Power BI.
 
-El repositorio se mantiene **privado** porque la operación institucional puede involucrar configuraciones de infraestructura y exportaciones con datos personales. Ningún archivo de datos identificatorios, secreto, respaldo o credencial debe ser incorporado a control de versiones. Para difusión pública se recomienda crear una copia saneada, con esta documentación técnica, el motor de afinidad y datos agregados o sintéticos claramente identificados.
+---
 
 ## Alcance funcional
 
 | Área | Contenido principal |
 |---|---|
-| Orientación | Catorce preguntas situacionales, alternativa neutral y ranking Top 3. |
-| Oferta | Dieciocho tecnicaturas activas organizadas en cinco áreas, más un perfil histórico para compatibilidad. |
-| Resultado | Animación accesible, comparación de afinidades, PDF individual y tarjeta social descargable. |
-| Datos | Registro con consentimiento, exportación CSV de 100 columnas y versiones de cuestionario y catálogo. |
-| Administración | Exportación y reinicio protegidos, bitácora de acciones y requisito de resguardo previo a reinicios. |
+| **Orientación inicial** | Cuestionario situacional de 14 preguntas balanceadas (modelo RIASEC adaptado a Jujuy), opción neutral y ranking Top 3 de afinidades. |
+| **Oferta académica versionada** | Catálogo oficial vigente (`2026.10-oficial-17`) con 17 tecnicaturas activas en 5 áreas de conocimiento, 1 tecnicatura en estado `pendiente_de_modelado` (Acompañamiento Terapéutico) y 2 perfiles históricos retirados (Guía de Turismo y Museología). Identificadores estables normalizados (`ts_*`). |
+| **Presentación de resultados** | Bandas cualitativas de afinidad (*Afinidad Alta*, *Media*, *Exploratoria*), visibilización explícita de empates, PDF individual descargable y tarjeta social PNG generada en alta resolución. |
+| **Privacidad Zero-PII** | Los nombres y apellidos solo residen en la memoria RAM del navegador para la descarga del PDF y **nunca** se persisten en la base de datos en modo permanente. Supresión estadística estricta ($N < 3$ y supresión complementaria) en métricas demográficas. |
+| **Modelo dimensional (Power BI)** | Exportación en formato largo de tres tablas de hechos relacionales (`FactEvaluaciones`, `FactAfinidades`, `FactRespuestas`) protegidas contra inyección de fórmulas CSV (CWE-1236). |
+| **Administración segura** | Autenticación con JWT firmado en cookies `HttpOnly`, diferenciación estricta de roles (`viewerProcedure` vs `adminProcedure`), derecho al olvido (borrado por ID), bitácora de auditoría y flujo de reinicio con resguardo obligatorio previo. |
+
+---
+
+## Modos de operación de la instancia
+
+La plataforma soporta dos modos de ejecución configurables mediante la variable de entorno `INSTANCE_MODE`:
+
+1. **Modo Permanente (`INSTANCE_MODE="permanent"`, predeterminado):**
+   - Modo de recolección continua sin datos personales (Zero-PII).
+   - Permite completar nuevas evaluaciones, consultar métricas en tiempo real y gestionar la base con derecho al olvido.
+2. **Modo Archivo Histórico (`INSTANCE_MODE="historical"`):**
+   - Archivo cerrado de solo lectura correspondiente a la muestra de la Expo Educativa 2026.
+   - Bloquea nuevas evaluaciones, desactiva la eliminación de registros y el reinicio de base de datos para preservar la inmutabilidad histórica.
+
+Consultar [docs/GOBIERNO_DE_DATOS.md](docs/GOBIERNO_DE_DATOS.md) y [ARCHIVO_HISTORICO.md](ARCHIVO_HISTORICO.md) para más detalles.
+
+---
 
 ## Estructura del repositorio
 
 ```text
 test-vocacional-ies11/
-├── client/                    # Interfaz React y componentes de experiencia
-├── server/                    # API tRPC, reglas de negocio y acceso a datos
-├── shared/                    # Motor vocacional, catálogo y contratos compartidos
-├── drizzle/                   # Esquema y migraciones de la base de datos
-├── scripts/                   # Auditorías y análisis reproducibles sin datos personales
-├── docs/                      # Gobierno de datos, arquitectura y operación
-├── tests/                     # Pruebas adicionales si se organizan fuera del código fuente
+├── client/                    # Interfaz React 19, Tailwind CSS, animaciones y componentes de UI
+├── server/                    # Servidor Express, API tRPC v11, seguridad JWT y acceso a datos
+├── shared/                    # Motor de afinidad RIASEC, catálogo versionado, tipos y contratos
+├── drizzle/                   # Esquema relacional Drizzle ORM y migraciones SQL
+├── scripts/                   # Auditorías metodológicas, simulaciones y análisis reproducibles
+├── docs/                      # Arquitectura, metodología, gobierno de datos, Power BI y operación
+├── CHANGELOG.md               # Historial de cambios y versiones de la plataforma
 ├── README.md                  # Este documento
-├── SECURITY.md                # Reglas para secretos y reportes de seguridad
-└── .gitignore                 # Exclusiones obligatorias de datos y entornos locales
+├── SECURITY.md                # Políticas de seguridad, tratamiento de secretos y reporte de fallos
+└── .env.example               # Plantilla de variables de entorno para despliegue local y producción
 ```
 
-## Puesta en marcha para colaboradores autorizados
+---
 
-El proyecto utiliza Node.js, pnpm y una base de datos compatible con el esquema de Drizzle. Las variables de entorno y las credenciales se administran exclusivamente mediante el canal seguro de la plataforma o el mecanismo institucional aprobado; **nunca** deben copiarse a archivos versionados, mensajes o capturas.
+## Puesta en marcha
 
-```bash
-pnpm install
-pnpm check
-pnpm test
-```
+### Requisitos previos
+- **Node.js** v20 o superior
+- **pnpm** v9 o superior
+- **MySQL** v8.0 o MariaDB v10.5+
 
-Las migraciones deben revisarse antes de aplicarse y ejecutarse en el orden definido en `drizzle/migrations/`. Cualquier cambio que afecte el cuestionario, el catálogo o el CSV debe actualizar las pruebas y la documentación de trazabilidad antes de su publicación.
+### Pasos de instalación y ejecución
 
-## Análisis reproducible y datos
+1. **Clonar e instalar dependencias:**
+   ```bash
+   git clone <URL_DEL_REPOSITORIO>
+   cd test-vocacional-ies11
+   pnpm install
+   ```
 
-El script `scripts/analyzeFinalCsv.py` genera análisis agregados a partir de una exportación autorizada. El archivo CSV original debe permanecer fuera del repositorio y en un almacenamiento institucional con acceso restringido. Los informes públicos no deben exponer nombre, apellido, ID, localidad detallada, fecha individual ni combinaciones que hagan posible reidentificar a una persona.
+2. **Configurar variables de entorno:**
+   Copiar la plantilla `.env.example` a `.env` y completar los valores requeridos:
+   ```bash
+   cp .env.example .env
+   ```
+   Variables fundamentales:
+   - `DATABASE_URL`: Cadena de conexión MySQL (`mysql://usuario:password@localhost:3306/vocational_db`).
+   - `ADMIN_INITIAL_USER`: Nombre de usuario del administrador inicial (por defecto: `admin`).
+   - `ADMIN_INITIAL_PASSWORD`: Contraseña para sembrar el administrador inicial en primer arranque.
+   - `ADMIN_JWT_SECRET`: Secreto criptográfico de al menos 32 caracteres para firmar los tokens JWT de sesión.
+   - `INSTANCE_MODE`: `permanent` para operación estándar o `historical` para archivo histórico de solo lectura.
 
-La guía completa se encuentra en [docs/GOBIERNO_DE_DATOS.md](docs/GOBIERNO_DE_DATOS.md) y el procedimiento de análisis en [docs/ANALISIS_REPRODUCIBLE.md](docs/ANALISIS_REPRODUCIBLE.md).
+3. **Sincronizar el esquema de base de datos:**
+   ```bash
+   pnpm db:push
+   ```
 
-## Flujo de contribución
+4. **Iniciar en entorno de desarrollo:**
+   ```bash
+   pnpm dev
+   ```
+   La aplicación se iniciará en `http://localhost:3000`.
 
-Toda modificación debe partir de una rama, incluir una explicación clara, ejecutar `pnpm check` y `pnpm test`, y revisar el impacto sobre datos personales, versiones y accesibilidad. Los cambios en la oferta académica requieren confirmación de una fuente institucional antes de actualizar el catálogo. Consulte [docs/CONTRIBUIR.md](docs/CONTRIBUIR.md) para el procedimiento completo.
+5. **Verificación de calidad y pruebas:**
+   ```bash
+   # Comprobación estricta de tipos de TypeScript
+   pnpm check
 
-## Documentación relacionada
+   # Suite completa de pruebas unitarias y de integración (Vitest)
+   pnpm test
+
+   # Compilación de producción optimizada (Vite + esbuild)
+   pnpm build
+   ```
+
+---
+
+## Panel administrativo y roles
+
+El acceso al panel administrativo se realiza en `/admin/login`:
+
+- **Rol `viewer` (Visualizador):** Acceso de solo lectura al panel analítico agregado, gráficos de distribución y métricas consolidadas. No puede exportar datos, eliminar evaluaciones ni reiniciar la base.
+- **Rol `admin` (Administrador):** Acceso pleno a métricas agregadas, exportación dimensional para Power BI, borrado individual por ID (derecho al olvido) y reinicio de métricas con resguardo previo mandatorio.
+
+---
+
+## Análisis reproducible y Power BI
+
+El procedimiento de exportación `exportCsv` genera tres archivos en formato largo (FactTables):
+- `FactEvaluaciones.csv`: Métricas demográficas y de recomendación anónimas (15 columnas, sin nombres ni apellidos).
+- `FactAfinidades.csv`: Ranking de afinidades desglosadas por carrera, puntaje y banderas de empate (8 columnas).
+- `FactRespuestas.csv`: Respuestas ítem por ítem con identificadores estables de pregunta y opción (7 columnas).
+
+Para mayor información técnica sobre el modelo en estrella y medidas DAX, consultar [docs/ANALISIS_REPRODUCIBLE.md](docs/ANALISIS_REPRODUCIBLE.md).
+
+---
+
+## Documentación técnica e institucional
 
 | Documento | Propósito |
 |---|---|
-| [Arquitectura](docs/ARQUITECTURA.md) | Describe componentes, flujo de datos y decisiones técnicas. |
-| [Gobierno de datos](docs/GOBIERNO_DE_DATOS.md) | Define privacidad, acceso, resguardo y publicación segura. |
-| [Operación y mantenimiento](docs/OPERACION_Y_MANTENIMIENTO.md) | Resume controles de administración, versionado y cierre de exposición. |
-| [Análisis reproducible](docs/ANALISIS_REPRODUCIBLE.md) | Establece cómo generar informes sin exponer registros personales. |
-| [Contribuir](docs/CONTRIBUIR.md) | Establece la revisión y los controles previos a integrar cambios. |
+| [Arquitectura](docs/ARQUITECTURA.md) | Componentes de software, contratos tRPC, seguridad de cookies y rendimiento. |
+| [Metodología](docs/METODOLOGIA.md) | Fundamentos psicométricos RIASEC, reglas de ponderación, catálogo y motor v2. |
+| [Gobierno de datos](docs/GOBIERNO_DE_DATOS.md) | Política Zero-PII, supresión estricta ($N < 3$), anonimización y derechos ARCO. |
+| [Operación y mantenimiento](docs/OPERACION_Y_MANTENIMIENTO.md) | Puesta en marcha, roles, sembrado de usuarios, respaldo y resolución de problemas. |
+| [Análisis reproducible](docs/ANALISIS_REPRODUCIBLE.md) | Esquema dimensional para Power BI, relaciones, prevención de inyección y scripts. |
+| [Seguridad](SECURITY.md) | Manejo de secretos, protección contra inyección CSV y mitigación de fuerza bruta. |
+| [Historial de cambios](CHANGELOG.md) | Registro de versiones y cambios evolutivos del proyecto. |
+
+---
 
 ## Autoría institucional
 
