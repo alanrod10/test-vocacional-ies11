@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import bcrypt from "bcryptjs";
-import { AdminUser, adminUsers, InsertAdminUser, InsertUser, vocationalAdminActions, vocationalAssessments, users } from "../drizzle/schema";
+import { AdminUser, adminUsers, InsertAdminUser, InsertUser, vocationalAdminActions, vocationalAssessments, VocationalAssessment, users } from "../drizzle/schema";
 import {
   CATALOG_VERSION,
   EXPO_CATALOG_VERSION,
@@ -9,6 +9,9 @@ import {
   LEGACY_CATALOG_VERSION,
   LEGACY_PROGRAM_NAMES,
   LEGACY_PROGRAMS,
+  normalizeSelections,
+  PROGRAM_BY_ID,
+  PROGRAM_BY_NAME,
   PROGRAM_CATALOG,
   PROGRAM_NAMES,
   PROGRAMS,
@@ -507,9 +510,9 @@ export async function getAggregatedAnalytics(catalogVersionFilter?: string): Pro
   }
 }
 
-function escapeCsv(value: unknown) {
+export function escapeCsv(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
-  // Evita que Excel interprete información aportada por una persona como una fórmula.
+  // Evita que Excel interprete información aportada por una persona como una fórmula (S7).
   const safeText = /^[=+\-@]/.test(text.trimStart()) ? `'${text}` : text;
   return `"${safeText.replace(/"/g, '""')}"`;
 }
@@ -517,7 +520,7 @@ function escapeCsv(value: unknown) {
 // Excel en configuraciones regionales en español abre el archivo directamente en
 // columnas cuando el delimitador es punto y coma. Las comillas preservan valores
 // que contengan comas, punto y coma o saltos de línea.
-const CSV_DELIMITER = ";";
+export const CSV_DELIMITER = ";";
 
 function formatUtcDate(value: Date | string) {
   const date = value instanceof Date ? value : new Date(value);
@@ -545,61 +548,259 @@ function formatJujuyDate(value: Date | string) {
   return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}-03:00`;
 }
 
-function getAnswerColumns(questionnaireVersion: string, selections: Record<string, string> | number[]) {
-  const indices = selectionsToIndices(selections);
-  return QUESTIONS.flatMap((question, index) => {
-    const selection = indices[index];
-    const isValidSelection = Number.isInteger(selection) && selection >= 0;
-    return [isValidSelection ? selection + 1 : "", isValidSelection ? getOptionLabelForQuestionnaireVersion(questionnaireVersion, index, selection) : ""];
-  });
+export type DimensionalTableType = "evaluations" | "affinities" | "responses";
+
+export const FACT_EVALUACIONES_HEADERS = [
+  "ID_Evaluacion",
+  "Fecha_UTC",
+  "Fecha_Argentina_Jujuy",
+  "Version_Cuestionario",
+  "Version_Catalogo",
+  "Version_Motor",
+  "Edad",
+  "Grupo_Edad",
+  "Sexo",
+  "Localidad",
+  "Situacion_Educativa",
+  "Intencion_Estudiar_IES11",
+  "Consentimiento_Datos",
+  "Tecnicatura_Recomendada",
+  "Area_Recomendada",
+];
+
+export const FACT_AFINIDADES_HEADERS = [
+  "ID_Evaluacion",
+  "Posicion_Top",
+  "Program_ID",
+  "Carrera",
+  "Puntaje_Afinidad",
+  "Area",
+  "Es_Afinidad_Ganadora",
+  "Es_Empate_Top",
+];
+
+export const FACT_RESPUESTAS_HEADERS = [
+  "ID_Evaluacion",
+  "Numero_Pregunta",
+  "Question_ID",
+  "Pregunta_Texto",
+  "Indice_Opcion",
+  "Option_ID",
+  "Texto_Opcion",
+];
+
+export function formatFactEvaluacionesRows(rows: VocationalAssessment[]): string {
+  return rows
+    .map((row) =>
+      [
+        row.id,
+        formatUtcDate(row.createdAt),
+        formatJujuyDate(row.createdAt),
+        row.questionnaireVersion ?? "2026.08-original",
+        row.catalogVersion ?? "2026.08-legado-19",
+        row.engineVersion ?? "2026.10-ids-estables",
+        row.age ?? "",
+        row.ageGroup ?? "",
+        row.sex ?? "",
+        row.locality ?? "",
+        row.educationStatus ?? "",
+        row.studyIntent ?? "",
+        row.dataConsent ? "Sí" : "No",
+        row.resultProgram ?? "",
+        row.resultArea ?? "",
+      ]
+        .map(escapeCsv)
+        .join(CSV_DELIMITER)
+    )
+    .join("\n");
 }
 
-function getAffinityColumns(scoreSnapshot: CreateAssessmentInput["scoreSnapshot"]) {
-  return Array.from({ length: LEGACY_PROGRAM_NAMES.length }, (_, index) => {
-    const affinity = scoreSnapshot[index];
-    return affinity ? [affinity.program, affinity.score, affinity.area] : ["", "", ""];
-  }).flat();
+export function buildFactEvaluacionesCsv(rows: VocationalAssessment[]): string {
+  const header = FACT_EVALUACIONES_HEADERS.map(escapeCsv).join(CSV_DELIMITER);
+  const data = formatFactEvaluacionesRows(rows);
+  return data.length > 0 ? `\uFEFF${header}\n${data}` : `\uFEFF${header}`;
 }
 
-/** Exportación completa destinada únicamente a personal autorizado del IES N.° 11. */
-export function buildVocationalCsv(rows: Awaited<ReturnType<typeof listVocationalAssessments>>) {
-  const isHistorical = (process.env.INSTANCE_MODE || "historical") === "historical";
-  const headers = [
-    "ID", "Fecha_UTC", "Fecha_Argentina_Jujuy", "Version_Cuestionario", "Version_Catalogo", "Nombre", "Apellido", "Edad", "Grupo_Edad", "Sexo",
-    "Localidad", "Situacion_Educativa", "Consentimiento_Datos",
-    "Intencion_Estudiar_IES11", "Tecnicatura_Recomendada", "Area",
-    ...QUESTIONS.flatMap((question) => {
-      const prefix = `P${String(question.numericId).padStart(2, "0")}`;
-      return [`${prefix}_Opcion`, `${prefix}_Texto`];
-    }),
-    ...Array.from({ length: LEGACY_PROGRAM_NAMES.length }, (_, index) => index + 1).flatMap((position) => [
-      `Afinidad_${position}_Carrera`,
-      `Afinidad_${position}_Puntaje`,
-      `Afinidad_${position}_Area`,
-    ]),
-  ];
-  const values = rows.map((row) => [
-    row.id,
-    formatUtcDate(row.createdAt),
-    formatJujuyDate(row.createdAt),
-    row.questionnaireVersion ?? "2026.08-original",
-    row.catalogVersion ?? "2026.08-legado-19",
-    isHistorical ? (row.firstName ?? "") : "",
-    isHistorical ? (row.lastName ?? "") : "",
-    row.age ?? "",
-    row.ageGroup ?? "",
-    row.sex,
-    row.locality,
-    row.educationStatus,
-    row.dataConsent ? "Sí" : "No",
-    row.studyIntent,
-    row.resultProgram,
-    row.resultArea,
-    ...getAnswerColumns(row.questionnaireVersion, row.selections),
-    ...getAffinityColumns(row.scoreSnapshot),
-  ].map(escapeCsv).join(CSV_DELIMITER));
+export function formatFactAfinidadesRows(rows: VocationalAssessment[]): string {
+  const lines: string[] = [];
+  for (const row of rows) {
+    const scoreSnapshot = Array.isArray(row.scoreSnapshot) ? row.scoreSnapshot : [];
+    const isTopTie = scoreSnapshot.length > 1 && scoreSnapshot[0].score === scoreSnapshot[1].score;
+    const topScore = scoreSnapshot.length > 0 ? scoreSnapshot[0].score : null;
 
-  return `\uFEFF${headers.map(escapeCsv).join(CSV_DELIMITER)}\n${values.join("\n")}`;
+    scoreSnapshot.forEach((affinity, index) => {
+      const programId =
+        (affinity as any).id ??
+        PROGRAM_BY_NAME[affinity.program]?.id ??
+        PROGRAM_BY_ID[affinity.program]?.id ??
+        affinity.program;
+      const area = affinity.area || PROGRAM_BY_NAME[affinity.program]?.area || "";
+      const isWinner = index === 0 ? "Sí" : "No";
+      const isTopTieRow = isTopTie && affinity.score === topScore ? "Sí" : "No";
+
+      lines.push(
+        [
+          row.id,
+          index + 1,
+          programId,
+          affinity.program,
+          affinity.score,
+          area,
+          isWinner,
+          isTopTieRow,
+        ]
+          .map(escapeCsv)
+          .join(CSV_DELIMITER)
+      );
+    });
+  }
+  return lines.join("\n");
+}
+
+export function buildFactAfinidadesCsv(rows: VocationalAssessment[]): string {
+  const header = FACT_AFINIDADES_HEADERS.map(escapeCsv).join(CSV_DELIMITER);
+  const data = formatFactAfinidadesRows(rows);
+  return data.length > 0 ? `\uFEFF${header}\n${data}` : `\uFEFF${header}`;
+}
+
+export function formatFactRespuestasRows(rows: VocationalAssessment[]): string {
+  const lines: string[] = [];
+  for (const row of rows) {
+    const indices = selectionsToIndices(row.selections);
+    const normalized = normalizeSelections(row.selections);
+
+    QUESTIONS.forEach((question, qIndex) => {
+      const selectedOptionId = normalized[question.id];
+      const optionIndex = indices[qIndex];
+      const isValidSelection = Number.isInteger(optionIndex) && optionIndex >= 0;
+
+      const optId = isValidSelection ? (question.options[optionIndex]?.id ?? selectedOptionId ?? "") : "";
+      const optLabel = isValidSelection
+        ? getOptionLabelForQuestionnaireVersion(row.questionnaireVersion, qIndex, optionIndex)
+        : "";
+
+      lines.push(
+        [
+          row.id,
+          question.numericId,
+          question.id,
+          question.prompt,
+          isValidSelection ? optionIndex + 1 : "",
+          optId,
+          optLabel,
+        ]
+          .map(escapeCsv)
+          .join(CSV_DELIMITER)
+      );
+    });
+  }
+  return lines.join("\n");
+}
+
+export function buildFactRespuestasCsv(rows: VocationalAssessment[]): string {
+  const header = FACT_RESPUESTAS_HEADERS.map(escapeCsv).join(CSV_DELIMITER);
+  const data = formatFactRespuestasRows(rows);
+  return data.length > 0 ? `\uFEFF${header}\n${data}` : `\uFEFF${header}`;
+}
+
+/** Exportación dimensional completa (alias a FactEvaluaciones para compatibilidad retroactiva). */
+export const buildVocationalCsv = buildFactEvaluacionesCsv;
+
+/**
+ * Exportación dimensional en formato largo para Power BI y análisis reproducible (S7).
+ * Utiliza procesamiento por lotes para evitar sobrecarga en memoria RAM.
+ */
+export async function exportDimensionalCsv(
+  table: DimensionalTableType = "evaluations",
+  rows?: VocationalAssessment[],
+  batchSize = 500
+): Promise<{ content: string; filename: string; recordCount: number }> {
+  const today = new Date().toISOString().slice(0, 10);
+  let filename = `FactEvaluaciones-${today}.csv`;
+  if (table === "affinities") {
+    filename = `FactAfinidades-${today}.csv`;
+  } else if (table === "responses") {
+    filename = `FactRespuestas-${today}.csv`;
+  }
+
+  // Si se proporcionan filas pre-cargadas (ej. desde el router o pruebas unitarias con mocks)
+  if (rows) {
+    let content = "";
+    if (table === "affinities") {
+      content = buildFactAfinidadesCsv(rows);
+    } else if (table === "responses") {
+      content = buildFactRespuestasCsv(rows);
+    } else {
+      content = buildFactEvaluacionesCsv(rows);
+    }
+    return { content, filename, recordCount: rows.length };
+  }
+
+  const db = await getDb();
+
+  // Si db está configurada, consultamos por lotes directamente para bajo consumo de memoria RAM (S7)
+  if (db) {
+    try {
+      let offset = 0;
+      let totalAssessments = 0;
+      const chunks: string[] = [];
+
+      let headerRow = "";
+      if (table === "affinities") {
+        headerRow = FACT_AFINIDADES_HEADERS.map(escapeCsv).join(CSV_DELIMITER);
+      } else if (table === "responses") {
+        headerRow = FACT_RESPUESTAS_HEADERS.map(escapeCsv).join(CSV_DELIMITER);
+      } else {
+        headerRow = FACT_EVALUACIONES_HEADERS.map(escapeCsv).join(CSV_DELIMITER);
+      }
+      chunks.push(`\uFEFF${headerRow}`);
+
+      while (true) {
+        const batch = await db
+          .select()
+          .from(vocationalAssessments)
+          .orderBy(vocationalAssessments.id)
+          .limit(batchSize)
+          .offset(offset);
+
+        if (batch.length === 0) break;
+        totalAssessments += batch.length;
+
+        let batchContent = "";
+        if (table === "affinities") {
+          batchContent = formatFactAfinidadesRows(batch);
+        } else if (table === "responses") {
+          batchContent = formatFactRespuestasRows(batch);
+        } else {
+          batchContent = formatFactEvaluacionesRows(batch);
+        }
+
+        if (batchContent.length > 0) {
+          chunks.push(batchContent);
+        }
+
+        offset += batch.length;
+        if (batch.length < batchSize) break;
+      }
+
+      const content = chunks.join("\n");
+      return { content, filename, recordCount: totalAssessments };
+    } catch {
+      // Fallback a listVocationalAssessments si la consulta por lotes falla
+    }
+  }
+
+  // Fallback si no hay conexión mysql directa activa:
+  const fallbackRows = await listVocationalAssessments();
+  let content = "";
+  if (table === "affinities") {
+    content = buildFactAfinidadesCsv(fallbackRows);
+  } else if (table === "responses") {
+    content = buildFactRespuestasCsv(fallbackRows);
+  } else {
+    content = buildFactEvaluacionesCsv(fallbackRows);
+  }
+  return { content, filename, recordCount: fallbackRows.length };
 }
 
 export async function deleteVocationalAssessment(id: number): Promise<boolean> {

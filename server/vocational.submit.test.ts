@@ -149,7 +149,7 @@ describe("registro vocacional con privacidad de datos (S6/S7)", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("solo permite el CSV completo a usuarios admin y anonimiza nombres en modo permanente", async () => {
+  it("solo permite exportación dimensional a usuarios admin, anonimiza en origen y previene inyección de fórmulas (S7)", async () => {
     process.env.INSTANCE_MODE = "permanent";
     const csvSelections = [1, 0, 2, 3, 1, 2, 0, 3, 1, 1, 0, 1, 7, 0];
     const csvScores = scoreSelections(csvSelections);
@@ -162,7 +162,7 @@ describe("registro vocacional con privacidad de datos (S6/S7)", () => {
         ageGroup: "16-18",
         sex: "Femenino",
         studyIntent: "Sí",
-        locality: "San Salvador de Jujuy",
+        locality: "=SUM(A1:A10)", // Prueba de inyección de fórmulas CSV
         educationStatus: "Secundario",
         discoverySource: "No informado",
         dataConsent: true,
@@ -179,30 +179,100 @@ describe("registro vocacional con privacidad de datos (S6/S7)", () => {
     await expect(appRouter.createCaller(publicContext()).vocational.exportCsv()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(appRouter.createCaller(viewerContext()).vocational.exportCsv()).rejects.toMatchObject({ code: "FORBIDDEN" });
 
-    const exported = await appRouter.createCaller(adminContext()).vocational.exportCsv();
-    const headerLine = exported.content.replace(/^\uFEFF/, "").split("\n")[0];
-    const firstDataLine = exported.content.replace(/^\uFEFF/, "").split("\n")[1];
-    const headers = headerLine.split(";").map((header) => header.replace(/^"|"$/g, ""));
-    const firstDataCells = parseQuotedCsvRow(firstDataLine);
-    expect(exported.filename).toMatch(/^resultados-vocacional-ies11-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(exported.content.startsWith("\uFEFF")).toBe(true);
-    expect(headerLine).toContain(";\"Fecha_UTC\"");
-    expect(headers).toHaveLength(101);
-    expect(firstDataCells).toHaveLength(101);
-    expect(firstDataCells[0]).toBe("7");
-    expect(headers).toContain("Grupo_Edad");
-    expect(firstDataCells[headers.indexOf("Grupo_Edad")]).toBe("16-18");
+    // 1. FactEvaluaciones (por defecto o parámetro explícito)
+    const evalExport = await appRouter.createCaller(adminContext()).vocational.exportCsv({ table: "evaluations" });
+    expect(evalExport.filename).toMatch(/^FactEvaluaciones-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(evalExport.content.startsWith("\uFEFF")).toBe(true);
 
-    // En modo permanente los nombres deben estar vacíos para resguardar la privacidad (S6/S7)
-    expect(firstDataCells[headers.indexOf("Nombre")]).toBe("");
-    expect(firstDataCells[headers.indexOf("Apellido")]).toBe("");
+    const evalHeaderLine = evalExport.content.replace(/^\uFEFF/, "").split("\n")[0];
+    const evalFirstDataLine = evalExport.content.replace(/^\uFEFF/, "").split("\n")[1];
+    const evalHeaders = evalHeaderLine.split(";").map((h) => h.replace(/^"|"$/g, ""));
+    const evalCells = parseQuotedCsvRow(evalFirstDataLine);
 
-    // Si cambia a modo histórico, las lecturas históricas conservan sus datos si existen
-    process.env.INSTANCE_MODE = "historical";
-    const historicalExport = await appRouter.createCaller(adminContext()).vocational.exportCsv();
-    const histDataLine = historicalExport.content.replace(/^\uFEFF/, "").split("\n")[1];
-    const histCells = parseQuotedCsvRow(histDataLine);
-    expect(histCells[headers.indexOf("Nombre")]).toBe("Ana");
-    expect(histCells[headers.indexOf("Apellido")]).toBe("Prueba");
+    // Formato largo dimensional de 15 columnas
+    expect(evalHeaders).toHaveLength(15);
+    expect(evalCells).toHaveLength(15);
+    expect(evalHeaders).toEqual([
+      "ID_Evaluacion",
+      "Fecha_UTC",
+      "Fecha_Argentina_Jujuy",
+      "Version_Cuestionario",
+      "Version_Catalogo",
+      "Version_Motor",
+      "Edad",
+      "Grupo_Edad",
+      "Sexo",
+      "Localidad",
+      "Situacion_Educativa",
+      "Intencion_Estudiar_IES11",
+      "Consentimiento_Datos",
+      "Tecnicatura_Recomendada",
+      "Area_Recomendada",
+    ]);
+
+    // Anonimización estricta en origen: no existen columnas de nombre ni apellido (S7)
+    expect(evalHeaders).not.toContain("Nombre");
+    expect(evalHeaders).not.toContain("Apellido");
+    expect(evalHeaders).not.toContain("firstName");
+    expect(evalHeaders).not.toContain("lastName");
+
+    expect(evalCells[0]).toBe("7");
+    expect(evalCells[evalHeaders.indexOf("Grupo_Edad")]).toBe("16-18");
+    expect(evalCells[evalHeaders.indexOf("Tecnicatura_Recomendada")]).toBe(csvScores[0].program);
+
+    // Prevención de inyección de fórmulas CSV (prefijo con apóstrofe)
+    expect(evalCells[evalHeaders.indexOf("Localidad")]).toBe("'=SUM(A1:A10)");
+
+    // 2. FactAfinidades (desglose dimensional de puntajes)
+    const affExport = await appRouter.createCaller(adminContext()).vocational.exportCsv({ table: "affinities" });
+    expect(affExport.filename).toMatch(/^FactAfinidades-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(affExport.content.startsWith("\uFEFF")).toBe(true);
+
+    const affHeaderLine = affExport.content.replace(/^\uFEFF/, "").split("\n")[0];
+    const affHeaders = affHeaderLine.split(";").map((h) => h.replace(/^"|"$/g, ""));
+    expect(affHeaders).toEqual([
+      "ID_Evaluacion",
+      "Posicion_Top",
+      "Program_ID",
+      "Carrera",
+      "Puntaje_Afinidad",
+      "Area",
+      "Es_Afinidad_Ganadora",
+      "Es_Empate_Top",
+    ]);
+
+    const affRows = affExport.content.replace(/^\uFEFF/, "").split("\n").slice(1);
+    expect(affRows.length).toBe(csvScores.length);
+    const topAffCells = parseQuotedCsvRow(affRows[0]);
+    expect(topAffCells[0]).toBe("7"); // ID_Evaluacion
+    expect(topAffCells[1]).toBe("1"); // Posicion_Top
+    expect(topAffCells[2]).toBeTruthy(); // Program_ID estable
+    expect(topAffCells[3]).toBe(csvScores[0].program); // Carrera
+    expect(topAffCells[6]).toBe("Sí"); // Es_Afinidad_Ganadora
+
+    // 3. FactRespuestas (desglose dimensional de ítems y respuestas)
+    const respExport = await appRouter.createCaller(adminContext()).vocational.exportCsv({ table: "responses" });
+    expect(respExport.filename).toMatch(/^FactRespuestas-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(respExport.content.startsWith("\uFEFF")).toBe(true);
+
+    const respHeaderLine = respExport.content.replace(/^\uFEFF/, "").split("\n")[0];
+    const respHeaders = respHeaderLine.split(";").map((h) => h.replace(/^"|"$/g, ""));
+    expect(respHeaders).toEqual([
+      "ID_Evaluacion",
+      "Numero_Pregunta",
+      "Question_ID",
+      "Pregunta_Texto",
+      "Indice_Opcion",
+      "Option_ID",
+      "Texto_Opcion",
+    ]);
+
+    const respRows = respExport.content.replace(/^\uFEFF/, "").split("\n").slice(1);
+    expect(respRows.length).toBe(14); // 14 preguntas del cuestionario
+    const firstRespCells = parseQuotedCsvRow(respRows[0]);
+    expect(firstRespCells[0]).toBe("7"); // ID_Evaluacion
+    expect(firstRespCells[1]).toBe("1"); // Numero_Pregunta
+    expect(firstRespCells[2]).toBe("q_proposal"); // Question_ID estable
+    expect(firstRespCells[5]).toBeTruthy(); // Option_ID estable
   });
 });

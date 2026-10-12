@@ -11,6 +11,7 @@ import {
   createVocationalAssessment,
   deleteAllVocationalAssessments,
   deleteVocationalAssessment,
+  exportDimensionalCsv,
   getAdminUserByUsername,
   getAggregatedAnalytics,
   getDb,
@@ -416,21 +417,31 @@ export const appRouter = router({
         await recordVocationalAdminAction("delete_assessment", "success", { assessmentId: input.id }, ctx.clientIp, actor);
         return { success: true, id: input.id };
       }),
-    exportCsv: adminProcedure.mutation(async ({ ctx }) => {
-      enforceAdminRateLimit(ctx.req, "export");
-      const actor = ctx.adminUser.username;
-      clearAdminRateLimit(ctx.req, "export");
-      const rows = await listVocationalAssessments();
-      const content = buildVocationalCsv(rows);
-      const backupReceipt = randomUUID();
-      backupReceipts.set(backupReceipt, { expiresAt: Date.now() + BACKUP_RECEIPT_TTL_MS, recordCount: rows.length });
-      await recordVocationalAdminAction("export_csv", "success", { recordCount: rows.length }, ctx.clientIp, actor);
-      return {
-        content,
-        filename: `resultados-vocacional-ies11-${new Date().toISOString().slice(0, 10)}.csv`,
-        backupReceipt,
-      };
-    }),
+    exportCsv: adminProcedure
+      .input(
+        z
+          .object({
+            table: z.enum(["evaluations", "affinities", "responses"]).optional(),
+          })
+          .optional()
+      )
+      .mutation(async ({ input, ctx }) => {
+        enforceAdminRateLimit(ctx.req, "export");
+        const actor = ctx.adminUser.username;
+        clearAdminRateLimit(ctx.req, "export");
+        const table = input?.table ?? "evaluations";
+        const rows = await listVocationalAssessments();
+        const { content, filename, recordCount } = await exportDimensionalCsv(table, rows);
+        const backupReceipt = randomUUID();
+        backupReceipts.set(backupReceipt, { expiresAt: Date.now() + BACKUP_RECEIPT_TTL_MS, recordCount });
+        await recordVocationalAdminAction("export_csv", "success", { table, recordCount }, ctx.clientIp, actor);
+        return {
+          content,
+          filename,
+          backupReceipt,
+          table,
+        };
+      }),
     createResetChallenge: adminProcedure.mutation(() => {
       requireOpenHistoricalArchive("reset");
       return { challenge: createResetChallenge() };

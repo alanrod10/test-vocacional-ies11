@@ -15,7 +15,9 @@ import {
 } from "recharts";
 import {
   BarChart3,
+  ChevronDown,
   Download,
+  FileSpreadsheet,
   RotateCcw,
   ShieldCheck,
   Users,
@@ -116,17 +118,43 @@ export default function AdminDashboard() {
   const currentUser = meQuery.data!;
   const isAdmin = currentUser.role === "admin";
 
-  const handleExport = async () => {
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+
+  const handleExport = async (table: "evaluations" | "affinities" | "responses" = "evaluations") => {
     if (!isAdmin) {
       toast.error("La exportación requiere rol de administrador.");
       return;
     }
     try {
-      const data = await exportCsv.mutateAsync();
+      const data = await exportCsv.mutateAsync({ table });
       saveCsvFile(data);
-      toast.success("CSV completo descargado exitosamente.");
+      const labels: Record<string, string> = {
+        evaluations: "FactEvaluaciones (Evaluaciones)",
+        affinities: "FactAfinidades (Afinidades)",
+        responses: "FactRespuestas (Respuestas)",
+      };
+      toast.success(`${labels[table] ?? "Tabla"} descargada exitosamente.`);
     } catch (err: any) {
       toast.error(err?.message || "No se pudo generar la exportación.");
+    }
+  };
+
+  const handleExportAll = async () => {
+    if (!isAdmin) {
+      toast.error("La exportación requiere rol de administrador.");
+      return;
+    }
+    try {
+      toast.info("Generando tablas dimensionales para Power BI…");
+      const ev = await exportCsv.mutateAsync({ table: "evaluations" });
+      saveCsvFile(ev);
+      const af = await exportCsv.mutateAsync({ table: "affinities" });
+      saveCsvFile(af);
+      const re = await exportCsv.mutateAsync({ table: "responses" });
+      saveCsvFile(re);
+      toast.success("Las 3 tablas dimensionales fueron descargadas exitosamente.");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo generar la exportación por lote.");
     }
   };
 
@@ -148,7 +176,7 @@ export default function AdminDashboard() {
     try {
       // 1. Descargar copia de respaldo obligatoria
       toast.info("Descargando copia de seguridad obligatoria antes de reiniciar…");
-      const backup = await exportCsv.mutateAsync();
+      const backup = await exportCsv.mutateAsync({ table: "evaluations" });
       saveCsvFile(backup);
       toast.success("Copia de seguridad guardada.");
 
@@ -291,14 +319,88 @@ export default function AdminDashboard() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {isAdmin ? (
               <>
-                <button
-                  onClick={handleExport}
-                  disabled={exportCsv.isPending}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1976b7]/25 bg-white px-4 py-3 font-display font-extrabold text-[#155f98] shadow-sm transition hover:bg-[#f5fbff] disabled:opacity-60"
-                >
-                  <Download size={18} />
-                  {exportCsv.isPending ? "Preparando CSV…" : "Exportar CSV completo"}
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsExportMenuOpen((prev) => !prev)}
+                    disabled={exportCsv.isPending}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1976b7]/25 bg-white px-4 py-3 font-display font-extrabold text-[#155f98] shadow-sm transition hover:bg-[#f5fbff] disabled:opacity-60"
+                    aria-expanded={isExportMenuOpen}
+                    aria-haspopup="true"
+                  >
+                    <Download size={18} />
+                    {exportCsv.isPending ? "Preparando CSV…" : "Exportar Power BI"}
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${isExportMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {isExportMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setIsExportMenuOpen(false)}
+                      />
+                      <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-2xl border border-[#d2e5f5] bg-white p-2 shadow-xl">
+                        <div className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-[#73848c]">
+                          Tablas Dimensionales (Power BI)
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsExportMenuOpen(false);
+                            handleExport("evaluations");
+                          }}
+                          className="flex w-full items-start gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition hover:bg-[#f0f7fc]"
+                        >
+                          <FileSpreadsheet size={16} className="mt-0.5 text-[#1976b7] shrink-0" />
+                          <div>
+                            <div className="font-bold text-[#102d54]">FactEvaluaciones</div>
+                            <div className="text-[11px] text-[#526064]">Perfil demográfico, resultado y fechas</div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsExportMenuOpen(false);
+                            handleExport("affinities");
+                          }}
+                          className="flex w-full items-start gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition hover:bg-[#f0f7fc]"
+                        >
+                          <FileSpreadsheet size={16} className="mt-0.5 text-[#10a979] shrink-0" />
+                          <div>
+                            <div className="font-bold text-[#102d54]">FactAfinidades</div>
+                            <div className="text-[11px] text-[#526064]">Puntajes por carrera, posiciones y empates</div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsExportMenuOpen(false);
+                            handleExport("responses");
+                          }}
+                          className="flex w-full items-start gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition hover:bg-[#f0f7fc]"
+                        >
+                          <FileSpreadsheet size={16} className="mt-0.5 text-[#f3a737] shrink-0" />
+                          <div>
+                            <div className="font-bold text-[#102d54]">FactRespuestas</div>
+                            <div className="text-[11px] text-[#526064]">Respuestas ítem por ítem y opciones</div>
+                          </div>
+                        </button>
+                        <div className="my-1 border-t border-[#e2e8f0]" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsExportMenuOpen(false);
+                            handleExportAll();
+                          }}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1976b7] px-3 py-2 text-center text-xs font-bold text-white transition hover:bg-[#155f98]"
+                        >
+                          <Download size={14} />
+                          Descargar las 3 tablas (Lote Power BI)
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {!HISTORICAL_ARCHIVE.enabled && (
                   <>
