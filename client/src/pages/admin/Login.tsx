@@ -130,7 +130,7 @@ export default function AdminLogin() {
             <button
               type="button"
               onClick={() => setLocation("/")}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#526064] transition hover:text-[#1976b7]"
+              className="inline-flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-[#526064] transition hover:text-[#1976b7]"
             >
               <ArrowLeft size={14} /> Volver al Test Vocacional
             </button>

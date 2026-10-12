@@ -252,7 +252,7 @@ export default function AdminDashboard() {
 
             <button
               onClick={() => setLocation("/")}
-              className="inline-flex items-center gap-1.5 rounded-2xl border border-[#172124]/10 bg-white px-3.5 py-2 text-xs font-bold text-[#526064] transition hover:bg-[#f0f4f8] hover:text-[#102d54]"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border border-[#172124]/10 bg-white px-3.5 py-2 text-xs font-bold text-[#526064] transition hover:bg-[#f0f4f8] hover:text-[#102d54]"
             >
               <ArrowLeft size={14} /> Ir al Test Público
             </button>
@@ -260,7 +260,7 @@ export default function AdminDashboard() {
             <button
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
-              className="inline-flex items-center gap-1.5 rounded-2xl bg-[#fff0eb] px-3.5 py-2 text-xs font-bold text-[#c55337] transition hover:bg-[#ffe2d9]"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl bg-[#fff0eb] px-3.5 py-2 text-xs font-bold text-[#c55337] transition hover:bg-[#ffe2d9]"
             >
               <LogOut size={14} /> Cerrar Sesión
             </button>
@@ -360,7 +360,7 @@ export default function AdminDashboard() {
                     aria-label="Seleccionar versión de catálogo"
                     value={selectedCatalogVersion ?? analyticsView?.version ?? ""}
                     onChange={(e) => setSelectedCatalogVersion(e.target.value)}
-                    className="rounded-xl border border-[#bfe8ff] bg-white px-3 py-2 text-sm font-bold text-[#155f98] outline-none focus:ring-4 focus:ring-[#1976b7]/15"
+                    className="min-h-[44px] rounded-xl border border-[#bfe8ff] bg-white px-3 py-2 text-sm font-bold text-[#155f98] outline-none focus:ring-4 focus:ring-[#1976b7]/15"
                   >
                     {catalogViews.map((view: any) => (
                       <option key={view.version} value={view.version}>

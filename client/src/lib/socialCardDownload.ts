@@ -1,5 +1,3 @@
-import { toPng } from "html-to-image";
-
 type DownloadLink = {
   href: string;
   download: string;
@@ -16,6 +14,7 @@ export function buildSocialCardFilename(programName: string) {
 }
 
 export async function downloadSocialCardPng(node: HTMLElement, programName: string, downloadDocument: DownloadDocument = document) {
+  const { toPng } = await import("html-to-image");
   const dataUrl = await toPng(node, {
     cacheBust: true,
     pixelRatio: 2,

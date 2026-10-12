@@ -1,4 +1,3 @@
-import { jsPDF } from "jspdf";
 import { INSTITUTION_INFO, type ProgramProfile } from "@shared/vocational";
 
 type RankingItem = { program: string; score: number; area: string };
@@ -30,6 +29,7 @@ function safeFileName(value: string) {
 }
 
 export async function downloadVocationalReport(report: VocationalReport) {
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const navy = "#102D54";
   const blue = "#1976B7";
