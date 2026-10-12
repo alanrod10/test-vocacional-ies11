@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import bcrypt from "bcryptjs";
 import { AdminUser, adminUsers, InsertAdminUser, InsertUser, vocationalAdminActions, vocationalAssessments, VocationalAssessment, users } from "../drizzle/schema";
 import {
+  CANDIDATE_V2_PROGRAM_NAMES,
   CATALOG_VERSION,
   EXPO_CATALOG_VERSION,
   getOptionLabelForQuestionnaireVersion,
@@ -10,12 +11,14 @@ import {
   LEGACY_PROGRAM_NAMES,
   LEGACY_PROGRAMS,
   normalizeSelections,
+  normalizeSelectionsV2,
   PROGRAM_BY_ID,
   PROGRAM_BY_NAME,
   PROGRAM_CATALOG,
   PROGRAM_NAMES,
   PROGRAMS,
   QUESTIONS,
+  QUESTIONS_V2,
   RETIRED_PROGRAM,
   selectionsToIndices,
 } from "../shared/vocational";
@@ -224,6 +227,17 @@ export async function getAggregatedAnalytics(catalogVersionFilter?: string): Pro
     buildEmptyCatalogView(CATALOG_VERSION, "Oferta oficial vigente de 17 tecnicaturas", PROGRAM_NAMES, PROGRAMS),
     buildEmptyCatalogView("2026.08-historico-consolidado", "Consolidado histórico (17 + 18 + 19 TS)", consolidatedProgramNames, consolidatedPrograms, true),
   ];
+
+  if (catalogVersionFilter && !emptyViews.some((v) => v.version === catalogVersionFilter)) {
+    emptyViews.push(
+      buildEmptyCatalogView(
+        catalogVersionFilter,
+        `Catálogo experimental / borrador (${catalogVersionFilter})`,
+        CANDIDATE_V2_PROGRAM_NAMES,
+        { ...consolidatedPrograms, "TS en Acompañamiento Terapéutico": { area: "Salud y Bienestar" } }
+      )
+    );
+  }
 
   const db = await getDb();
   if (!db) {
@@ -478,6 +492,15 @@ export async function getAggregatedAnalytics(catalogVersionFilter?: string): Pro
     buildCatalogView(EXPO_CATALOG_VERSION, "Oferta oficial Expo 2026 (18 tecnicaturas)", expo18ProgramNames, expo18ProgramsRecord, (v) => v === EXPO_CATALOG_VERSION),
     buildCatalogView(CATALOG_VERSION, "Oferta oficial vigente de 17 tecnicaturas", PROGRAM_NAMES, PROGRAMS, (v) => v === CATALOG_VERSION),
     buildCatalogView("2026.08-historico-consolidado", "Consolidado histórico (17 + 18 + 19 TS)", consolidatedProgramNames, consolidatedPrograms, (v) => recognizedVersions.includes(v), true),
+    ...unknownCatalogVersions.map((uVer) =>
+      buildCatalogView(
+        uVer,
+        `Catálogo experimental / borrador (${uVer})`,
+        CANDIDATE_V2_PROGRAM_NAMES,
+        { ...consolidatedPrograms, "TS en Acompañamiento Terapéutico": { area: "Salud y Bienestar" } },
+        (v) => v === uVer
+      )
+    ),
   ];
 
   const active =
@@ -666,17 +689,37 @@ export function buildFactAfinidadesCsv(rows: VocationalAssessment[]): string {
 export function formatFactRespuestasRows(rows: VocationalAssessment[]): string {
   const lines: string[] = [];
   for (const row of rows) {
-    const indices = selectionsToIndices(row.selections);
-    const normalized = normalizeSelections(row.selections);
+    const isV2 =
+      row.catalogVersion?.includes("36") ||
+      row.questionnaireVersion?.includes("36") ||
+      row.engineVersion?.includes("v2") ||
+      (Array.isArray(row.selections) && row.selections.length === 36) ||
+      (typeof row.selections === "object" &&
+        row.selections !== null &&
+        !Array.isArray(row.selections) &&
+        Object.keys(row.selections).some((k) => k.startsWith("q_r") || k.startsWith("q_i")));
 
-    QUESTIONS.forEach((question, qIndex) => {
+    const questionsList = isV2 ? QUESTIONS_V2 : QUESTIONS;
+    const normalized = isV2 ? normalizeSelectionsV2(row.selections) : normalizeSelections(row.selections);
+    const indices = isV2
+      ? (Array.isArray(row.selections)
+          ? row.selections
+          : QUESTIONS_V2.map((q) => {
+              const optId = (row.selections as Record<string, string>)[q.id];
+              return q.options.findIndex((opt) => opt.id === optId);
+            }))
+      : selectionsToIndices(row.selections);
+
+    questionsList.forEach((question, qIndex) => {
       const selectedOptionId = normalized[question.id];
       const optionIndex = indices[qIndex];
       const isValidSelection = Number.isInteger(optionIndex) && optionIndex >= 0;
 
       const optId = isValidSelection ? (question.options[optionIndex]?.id ?? selectedOptionId ?? "") : "";
       const optLabel = isValidSelection
-        ? getOptionLabelForQuestionnaireVersion(row.questionnaireVersion, qIndex, optionIndex)
+        ? (isV2
+            ? question.options[optionIndex]?.label ?? ""
+            : getOptionLabelForQuestionnaireVersion(row.questionnaireVersion, qIndex, optionIndex))
         : "";
 
       lines.push(

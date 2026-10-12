@@ -20,7 +20,7 @@ import {
 } from "./db";
 import { safeDistributionRecord } from "./privacySuppression";
 import { clearAdminCookie, setAdminCookie, signAdminToken } from "./_core/adminAuth";
-import { CATALOG_VERSION, ENGINE_VERSION, EXPO_CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_CATALOG, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, RETIRED_PROGRAM, getInterestProfile, hasScorableSignal, normalizeSelections, scoreSelections } from "../shared/vocational";
+import { CANDIDATE_V2_PROGRAM_NAMES, CATALOG_VERSION, ENGINE_VERSION, EXPO_CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_CATALOG, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, RETIRED_PROGRAM, getInterestProfile, hasScorableSignal, normalizeSelections, scoreSelections } from "../shared/vocational";
 import { HISTORICAL_ARCHIVE, HISTORICAL_ARCHIVE_MESSAGE } from "../shared/archive";
 
 export function categorizeAge(age?: number | null, ageGroup?: string | null): string {
@@ -252,6 +252,17 @@ export function calculateAnalytics(
       row.catalogVersion !== CATALOG_VERSION
   );
 
+  const unknownCatalogVersions = Array.from(new Set(unknownRows.map((row) => row.catalogVersion)));
+  const unknownViews = unknownCatalogVersions.map((uVer) => {
+    const uRows = rows.filter((r) => r.catalogVersion === uVer);
+    return {
+      version: uVer,
+      label: `Catálogo experimental / borrador (${uVer})`,
+      programCount: CANDIDATE_V2_PROGRAM_NAMES.length,
+      ...calculateCatalogAnalytics(uRows, CANDIDATE_V2_PROGRAM_NAMES, { ...consolidatedPrograms, "TS en Acompañamiento Terapéutico": { area: "Salud y Bienestar" } }),
+    };
+  });
+
   const catalogViews = [
     {
       version: LEGACY_CATALOG_VERSION,
@@ -278,6 +289,7 @@ export function calculateAnalytics(
       isConsolidated: true,
       ...calculateCatalogAnalytics(recognizedRows, consolidatedProgramNames, consolidatedPrograms, true),
     },
+    ...unknownViews,
   ];
 
   const active =

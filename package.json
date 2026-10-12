@@ -12,7 +12,8 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "simulate-engine": "tsx scripts/simulateEngine.ts",
-    "compare-engines": "tsx scripts/compareEngines.ts"
+    "compare-engines": "tsx scripts/compareEngines.ts",
+    "run-pilot-v2": "tsx scripts/runPilotV2.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
