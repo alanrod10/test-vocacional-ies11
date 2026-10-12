@@ -92,6 +92,13 @@
       "when": 1791759596567,
       "tag": "0012_thin_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1791761381604,
+      "tag": "0013_condemned_talos",
+      "breakpoints": true
     }
   ]
 }

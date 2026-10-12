@@ -38,10 +38,11 @@ export const vocationalAssessments = mysqlTable("vocational_assessments", {
   dataConsent: tinyint("dataConsent").$type<boolean>().default(false).notNull(),
   resultProgram: varchar("resultProgram", { length: 180 }).notNull(),
   resultArea: varchar("resultArea", { length: 100 }).notNull(),
-  selections: json("selections").$type<number[]>().notNull(),
+  selections: json("selections").$type<number[] | Record<string, string>>().notNull(),
   scoreSnapshot: json("scoreSnapshot").$type<{ program: string; score: number; area: string }[]>().notNull(),
   questionnaireVersion: varchar("questionnaireVersion", { length: 50 }).default("2026.08-original").notNull(),
   catalogVersion: varchar("catalogVersion", { length: 50 }).default("2026.08-legado-19").notNull(),
+  engineVersion: varchar("engineVersion", { length: 50 }).default("2026.10-ids-estables").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

@@ -47,7 +47,7 @@ export default function Home() {
   const [stage, setStage] = useState<Stage>("register");
   const [profile, setProfile] = useState<ParticipantProfile>(emptyParticipantProfile);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [answers, setAnswers] = useState<number[]>([]);
+  const [selections, setSelections] = useState<Record<string, string>>({});
   const [displayQuestionIndex, setDisplayQuestionIndex] = useState(0);
   const [result, setResult] = useState<{ winner: { program: string; score: number; area: string }; topThree: { program: string; score: number; area: string }[] } | null>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
@@ -99,24 +99,27 @@ export default function Home() {
 
   const chooseAnswer = (optionIndex: number) => {
     if (isAdvancing || submit.isPending) return;
+    const option = currentQuestion.options[optionIndex];
+    if (!option) return;
     setSelectedAnswer(optionIndex);
     setAnswerTransition("selected");
     setIsAdvancing(true);
-    const nextAnswers = appendAnswer(answers, optionIndex);
+    const nextSelections = { ...selections, [currentQuestion.id]: option.id };
+    const answeredCount = Object.keys(nextSelections).length;
     window.setTimeout(() => {
       setAnswerTransition("leaving");
       window.setTimeout(() => {
-        setAnswers(nextAnswers);
-        const transition = resolveQuestionTransition(displayQuestionIndex, nextAnswers.length, QUESTIONS.length);
+        setSelections(nextSelections);
+        const transition = resolveQuestionTransition(displayQuestionIndex, answeredCount, QUESTIONS.length);
         if (transition.isComplete) {
           submit.mutate({
             age: Number(profile.age),
             sex: profile.sex as Sex,
-            studyIntent: QUESTIONS[QUESTIONS.length - 1].options[nextAnswers[nextAnswers.length - 1]].label,
+            studyIntent: option.label,
             locality: profile.locality,
             educationStatus: profile.educationStatus,
             dataConsent: profile.dataConsent,
-            selections: nextAnswers,
+            selections: nextSelections,
           });
         } else {
           setDisplayQuestionIndex(transition.nextQuestionIndex);
@@ -132,7 +135,7 @@ export default function Home() {
     setStage("register");
     setProfile(emptyParticipantProfile);
     setErrors({});
-    setAnswers([]);
+    setSelections({});
     setDisplayQuestionIndex(0);
     setResult(null);
     setAnswerTransition("idle");
@@ -148,7 +151,7 @@ export default function Home() {
         <section className="relative mx-auto max-w-3xl">
           {HISTORICAL_ARCHIVE.enabled ? <HistoricalLanding /> : <>
             {stage === "register" && <Registration profile={profile} setProfile={setProfile} errors={errors} onStart={startTest} />}
-            {stage === "test" && currentQuestion && <QuestionStep key={currentQuestion.id} questionIndex={displayQuestionIndex} question={currentQuestion} transitionState={answerTransition} selectedAnswer={selectedAnswer} onChoose={chooseAnswer} onBack={() => { if (answerTransition !== "idle") return; if (!answers.length) setStage("register"); else { setAnswers((current) => current.slice(0, -1)); setDisplayQuestionIndex((current) => Math.max(0, current - 1)); } }} />}
+            {stage === "test" && currentQuestion && <QuestionStep key={currentQuestion.id} questionIndex={displayQuestionIndex} question={currentQuestion} transitionState={answerTransition} selectedAnswer={selectedAnswer} onChoose={chooseAnswer} onBack={() => { if (answerTransition !== "idle") return; if (displayQuestionIndex === 0) setStage("register"); else { const prevIndex = displayQuestionIndex - 1; const prevQuestion = QUESTIONS[prevIndex]; setSelections((current) => { const next = { ...current }; if (prevQuestion) delete next[prevQuestion.id]; return next; }); setDisplayQuestionIndex(prevIndex); } }} />}
             {stage === "result" && result && winnerProfile && <ResultStep name={displayName} participant={{ age: Number(profile.age) }} result={result} profile={winnerProfile} onReset={resetTest} />}
           </>}
         </section>

@@ -1,0 +1,1 @@
+ALTER TABLE `vocational_assessments` ADD `engineVersion` varchar(50) DEFAULT '2026.10-ids-estables' NOT NULL;

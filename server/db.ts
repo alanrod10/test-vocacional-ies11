@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import bcrypt from "bcryptjs";
 import { AdminUser, adminUsers, InsertAdminUser, InsertUser, vocationalAdminActions, vocationalAssessments, users } from "../drizzle/schema";
-import { getOptionLabelForQuestionnaireVersion, LEGACY_PROGRAM_NAMES, QUESTIONS } from "../shared/vocational";
+import { getOptionLabelForQuestionnaireVersion, LEGACY_PROGRAM_NAMES, QUESTIONS, selectionsToIndices } from "../shared/vocational";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -103,10 +103,11 @@ export type CreateAssessmentInput = {
   dataConsent: boolean;
   resultProgram: string;
   resultArea: string;
-  selections: number[];
-  scoreSnapshot: { program: string; score: number; area: string }[];
+  selections: Record<string, string> | number[];
+  scoreSnapshot: { id?: string; program: string; score: number; area: string }[];
   questionnaireVersion: string;
   catalogVersion: string;
+  engineVersion?: string;
 };
 
 export async function createVocationalAssessment(input: CreateAssessmentInput) {
@@ -160,9 +161,10 @@ function formatJujuyDate(value: Date | string) {
   return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}-03:00`;
 }
 
-function getAnswerColumns(questionnaireVersion: string, selections: number[]) {
+function getAnswerColumns(questionnaireVersion: string, selections: Record<string, string> | number[]) {
+  const indices = selectionsToIndices(selections);
   return QUESTIONS.flatMap((question, index) => {
-    const selection = selections[index];
+    const selection = indices[index];
     const isValidSelection = Number.isInteger(selection) && selection >= 0;
     return [isValidSelection ? selection + 1 : "", isValidSelection ? getOptionLabelForQuestionnaireVersion(questionnaireVersion, index, selection) : ""];
   });
@@ -183,7 +185,7 @@ export function buildVocationalCsv(rows: Awaited<ReturnType<typeof listVocationa
     "Localidad", "Situacion_Educativa", "Consentimiento_Datos",
     "Intencion_Estudiar_IES11", "Tecnicatura_Recomendada", "Area",
     ...QUESTIONS.flatMap((question) => {
-      const prefix = `P${String(question.id).padStart(2, "0")}`;
+      const prefix = `P${String(question.numericId).padStart(2, "0")}`;
       return [`${prefix}_Opcion`, `${prefix}_Texto`];
     }),
     ...Array.from({ length: LEGACY_PROGRAM_NAMES.length }, (_, index) => index + 1).flatMap((position) => [

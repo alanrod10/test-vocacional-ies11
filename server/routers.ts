@@ -8,7 +8,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { buildVocationalCsv, createVocationalAssessment, deleteAllVocationalAssessments, deleteVocationalAssessment, getAdminUserByUsername, listVocationalAssessments, recordVocationalAdminAction } from "./db";
 import { clearAdminCookie, setAdminCookie, signAdminToken } from "./_core/adminAuth";
-import { CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, getInterestProfile, hasScorableSignal, scoreSelections } from "../shared/vocational";
+import { CATALOG_VERSION, ENGINE_VERSION, EXPO_CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_CATALOG, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, RETIRED_PROGRAM, getInterestProfile, hasScorableSignal, normalizeSelections, scoreSelections } from "../shared/vocational";
 import { HISTORICAL_ARCHIVE, HISTORICAL_ARCHIVE_MESSAGE } from "../shared/archive";
 
 export function categorizeAge(age?: number | null, ageGroup?: string | null): string {
@@ -34,7 +34,10 @@ const assessmentInput = z.object({
   locality: z.string().trim().min(2).max(120),
   educationStatus: z.string().trim().min(2).max(100),
   dataConsent: z.boolean().refine((value) => value, "Necesitamos tu consentimiento para guardar el resultado."),
-  selections: z.array(z.number().int().min(0)).length(QUESTIONS.length),
+  selections: z.union([
+    z.record(z.string(), z.string()),
+    z.array(z.number().int().min(0)).length(QUESTIONS.length),
+  ]),
 }).refine((data) => data.age !== undefined || data.ageGroup !== undefined, {
   message: "Debés indicar tu edad o grupo de edad.",
 });
@@ -206,21 +209,63 @@ function calculateCatalogAnalytics(rows: Awaited<ReturnType<typeof listVocationa
 
 export function calculateAnalytics(rows: Awaited<ReturnType<typeof listVocationalAssessments>>) {
   const legacyRows = rows.filter((row) => row.catalogVersion === LEGACY_CATALOG_VERSION);
+  const expo18Programs = PROGRAM_CATALOG.filter((p) => p.name !== RETIRED_PROGRAM && p.name !== "TS en Acompañamiento Terapéutico");
+  const expo18ProgramNames = expo18Programs.map((p) => p.name);
+  const expo18ProgramsRecord = Object.fromEntries(expo18Programs.map((p) => [p.name, p]));
+  const expoRows = rows.filter((row) => row.catalogVersion === "2026.08-oficial-18");
   const officialRows = rows.filter((row) => row.catalogVersion === CATALOG_VERSION);
+
   const consolidatedProgramNames = Array.from(new Set([...LEGACY_PROGRAM_NAMES, ...PROGRAM_NAMES]));
   const consolidatedPrograms = { ...LEGACY_PROGRAMS, ...PROGRAMS };
-  const recognizedRows = [...legacyRows, ...officialRows];
-  const unknownRows = rows.filter((row) => row.catalogVersion !== LEGACY_CATALOG_VERSION && row.catalogVersion !== CATALOG_VERSION);
-  const catalogViews = [
-    { version: LEGACY_CATALOG_VERSION, label: "Catálogo histórico de 19 tecnicaturas", programCount: LEGACY_PROGRAM_NAMES.length, ...calculateCatalogAnalytics(legacyRows, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS) },
-    { version: CATALOG_VERSION, label: "Oferta oficial vigente de 18 tecnicaturas", programCount: PROGRAM_NAMES.length, ...calculateCatalogAnalytics(officialRows, PROGRAM_NAMES, PROGRAMS) },
-    { version: "2026.08-historico-consolidado", label: "Consolidado histórico (18 + 19 TS)", programCount: consolidatedProgramNames.length, isConsolidated: true, ...calculateCatalogAnalytics(recognizedRows, consolidatedProgramNames, consolidatedPrograms) },
-  ];
-  const active = catalogViews.find((view) => view.version === CATALOG_VERSION && view.total > 0)
-    ?? catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION)
-    ?? calculateCatalogAnalytics([], PROGRAM_NAMES, PROGRAMS);
+  const recognizedRows = [...legacyRows, ...expoRows, ...officialRows];
+  const unknownRows = rows.filter(
+    (row) =>
+      row.catalogVersion !== LEGACY_CATALOG_VERSION &&
+      row.catalogVersion !== "2026.08-oficial-18" &&
+      row.catalogVersion !== CATALOG_VERSION
+  );
 
-  return { ...active, totalAll: rows.length, catalogViews, unknownCatalogTotal: unknownRows.length, unknownCatalogVersions: Array.from(new Set(unknownRows.map((row) => row.catalogVersion))) };
+  const catalogViews = [
+    {
+      version: LEGACY_CATALOG_VERSION,
+      label: "Catálogo histórico de 19 tecnicaturas",
+      programCount: LEGACY_PROGRAM_NAMES.length,
+      ...calculateCatalogAnalytics(legacyRows, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS),
+    },
+    {
+      version: "2026.08-oficial-18",
+      label: "Oferta oficial Expo 2026 (18 tecnicaturas)",
+      programCount: 18,
+      ...calculateCatalogAnalytics(expoRows, expo18ProgramNames, expo18ProgramsRecord),
+    },
+    {
+      version: CATALOG_VERSION,
+      label: "Oferta oficial vigente de 17 tecnicaturas",
+      programCount: PROGRAM_NAMES.length,
+      ...calculateCatalogAnalytics(officialRows, PROGRAM_NAMES, PROGRAMS),
+    },
+    {
+      version: "2026.08-historico-consolidado",
+      label: "Consolidado histórico (17 + 18 + 19 TS)",
+      programCount: consolidatedProgramNames.length,
+      isConsolidated: true,
+      ...calculateCatalogAnalytics(recognizedRows, consolidatedProgramNames, consolidatedPrograms),
+    },
+  ];
+
+  const active =
+    catalogViews.find((view) => view.version === CATALOG_VERSION && view.total > 0) ??
+    catalogViews.find((view) => view.version === "2026.08-oficial-18" && view.total > 0) ??
+    catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION) ??
+    calculateCatalogAnalytics([], PROGRAM_NAMES, PROGRAMS);
+
+  return {
+    ...active,
+    totalAll: rows.length,
+    catalogViews,
+    unknownCatalogTotal: unknownRows.length,
+    unknownCatalogVersions: Array.from(new Set(unknownRows.map((row) => row.catalogVersion))),
+  };
 }
 
 export const appRouter = router({
@@ -280,16 +325,19 @@ export const appRouter = router({
   vocational: router({
     submit: publicProcedure.input(assessmentInput).mutation(async ({ input }) => {
       requireOpenHistoricalArchive("assessment");
-      input.selections.forEach((selection, index) => {
-        if (selection >= QUESTIONS[index]?.options.length) throw new Error("Hay una respuesta fuera del rango permitido.");
-      });
-      if (!hasScorableSignal(input.selections)) {
+      const normalizedSelections = normalizeSelections(input.selections);
+      if (Array.isArray(input.selections)) {
+        input.selections.forEach((selection, index) => {
+          if (selection >= (QUESTIONS[index]?.options.length ?? 0)) throw new Error("Hay una respuesta fuera del rango permitido.");
+        });
+      }
+      if (!hasScorableSignal(normalizedSelections)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Para calcular una afinidad, elegí al menos una actividad que te represente.",
         });
       }
-      const scores = scoreSelections(input.selections);
+      const scores = scoreSelections(normalizedSelections);
       const winner = scores[0];
       if (!winner) throw new Error("No fue posible calcular el resultado.");
       const computedAgeGroup = categorizeAge(input.age, input.ageGroup);
@@ -308,9 +356,10 @@ export const appRouter = router({
         scoreSnapshot: scores,
         questionnaireVersion: QUESTIONNAIRE_VERSION,
         catalogVersion: CATALOG_VERSION,
-        selections: input.selections,
+        engineVersion: ENGINE_VERSION,
+        selections: normalizedSelections,
       });
-      return { id, winner, topThree: scores.slice(0, 3), interestProfile: getInterestProfile(input.selections) };
+      return { id, winner, topThree: scores.slice(0, 3), interestProfile: getInterestProfile(normalizedSelections) };
     }),
     analytics: viewerProcedure.query(async () => calculateAnalytics(await listVocationalAssessments())),
     deleteAssessment: adminProcedure
