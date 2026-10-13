@@ -26,26 +26,25 @@ import {
 import { calculateAnalytics } from "./routers";
 
 describe("motor vocacional", () => {
-  it("incluye las 17 tecnicaturas activas oficiales, conserva el catálogo versionado (20 TS) y preguntas con IDs estables", () => {
-    expect(PROGRAM_NAMES).toHaveLength(17);
-    expect(ACTIVE_PROGRAM_NAMES).toHaveLength(17);
-    expect(LEGACY_PROGRAM_NAMES).toHaveLength(19);
+  it("incluye las 18 tecnicaturas activas oficiales, conserva el catálogo versionado (20 TS) y preguntas con IDs estables", () => {
+    expect(PROGRAM_NAMES).toHaveLength(18);
+    expect(ACTIVE_PROGRAM_NAMES).toHaveLength(18);
+    expect(LEGACY_PROGRAM_NAMES).toHaveLength(18);
     expect(PROGRAM_CATALOG).toHaveLength(20);
 
     // Estados de catálogo
-    expect(PROGRAM_CATALOG.filter((p) => p.status === "activa")).toHaveLength(17);
+    expect(PROGRAM_CATALOG.filter((p) => p.status === "activa")).toHaveLength(18);
     expect(PROGRAM_CATALOG.filter((p) => p.status === "retirada")).toHaveLength(2);
-    expect(PROGRAM_CATALOG.filter((p) => p.status === "pendiente_de_modelado")).toHaveLength(1);
 
     // Verificación de carreras específicas con estado
     expect(PROGRAM_CATALOG.find((p) => p.id === "ts_guia_turismo")?.status).toBe("retirada");
     expect(PROGRAM_CATALOG.find((p) => p.id === "ts_museologia_gestion_patrimonial")?.status).toBe("retirada");
-    expect(PROGRAM_CATALOG.find((p) => p.id === "ts_acompanamiento_terapeutico")?.status).toBe("pendiente_de_modelado");
+    expect(PROGRAM_CATALOG.find((p) => p.id === "ts_acompanamiento_terapeutico")?.status).toBe("activa");
 
-    // Carreras retiradas o pendientes no compiten en el catálogo activo
+    // Carreras retiradas no compiten en el catálogo activo
     expect(PROGRAM_NAMES).not.toContain("TS en Guía de Turismo");
     expect(PROGRAM_NAMES).not.toContain("TS en Museología y Gestión Patrimonial");
-    expect(PROGRAM_NAMES).not.toContain("TS en Acompañamiento Terapéutico");
+    expect(PROGRAM_NAMES).toContain("TS en Acompañante Terapéutico");
 
     // IDs estables en preguntas y opciones
     expect(QUESTIONS).toHaveLength(14);
@@ -105,13 +104,13 @@ describe("motor vocacional", () => {
     expect(data[0].program).not.toBe(community[0].program);
   });
 
-  it("devuelve un ranking completo de las 17 carreras activas sin omitir ninguna", () => {
+  it("devuelve un ranking completo de las 18 carreras activas sin omitir ninguna", () => {
     const scores = scoreSelections(Array(QUESTIONS.length).fill(0));
-    expect(scores).toHaveLength(17);
-    expect(new Set(scores.map((item) => item.program)).size).toBe(17);
+    expect(scores).toHaveLength(18);
+    expect(new Set(scores.map((item) => item.program)).size).toBe(18);
     expect(scores.some((item) => item.program === "TS en Guía de Turismo")).toBe(false);
     expect(scores.some((item) => item.program === "TS en Museología y Gestión Patrimonial")).toBe(false);
-    expect(scores.some((item) => item.program === "TS en Acompañamiento Terapéutico")).toBe(false);
+    expect(scores.some((item) => item.program === "TS en Acompañante Terapéutico")).toBe(true);
   });
 
   it("normaliza las señales específicas para no favorecer carreras por cantidad de apariciones", () => {
@@ -137,22 +136,18 @@ describe("motor vocacional", () => {
     expect(hasScorableSignal([...neutralSelections.slice(0, 1), 0, ...neutralSelections.slice(2)])).toBe(true);
   });
 
-  it("calcula KPIs, ranking y distribuciones de analítica para todos los catálogos", () => {
+  it("calcula KPIs, ranking y distribuciones de analítica para el catálogo oficial", () => {
     const rows = [
-      { id: 1, firstName: "Ana", lastName: "Pérez", age: 17, sex: "Femenino", locality: "San Salvador de Jujuy", educationStatus: "Secundario: último año", discoverySource: "Código QR del stand", dataConsent: true, resultProgram: "TS en Desarrollo de Software", resultArea: "Tecnología e Innovación", selections: [], scoreSnapshot: [{ program: "TS en Desarrollo de Software", score: 90, area: "Tecnología e Innovación" }, { program: "TS en Ciencias de Datos e Inteligencia Artificial", score: 83, area: "Tecnología e Innovación" }, { program: "TS en Estadísticas de Salud", score: 76, area: "Salud y Bienestar" }], catalogVersion: LEGACY_CATALOG_VERSION, createdAt: new Date() },
-      { id: 2, firstName: "Luis", lastName: "Gómez", age: 21, sex: "Masculino", locality: "Palpalá", educationStatus: "Egresé del secundario", discoverySource: "En el stand de Expo Educativa", dataConsent: true, resultProgram: "TS en Desarrollo de Software", resultArea: "Tecnología e Innovación", selections: [], scoreSnapshot: [{ program: "TS en Desarrollo de Software", score: 91, area: "Tecnología e Innovación" }, { program: "TS en Ciencias de Datos e Inteligencia Artificial", score: 82, area: "Tecnología e Innovación" }, { program: "TS en Enfermería", score: 75, area: "Salud y Bienestar" }], catalogVersion: LEGACY_CATALOG_VERSION, createdAt: new Date() },
-      { id: 3, firstName: "Sol", lastName: "Díaz", age: 37, sex: "Femenino", locality: "San Salvador de Jujuy", educationStatus: "Estudio o trabajo actualmente", discoverySource: "Código QR del stand", dataConsent: true, resultProgram: "TS en Enfermería", resultArea: "Salud y Bienestar", selections: [], scoreSnapshot: [{ program: "TS en Enfermería", score: 92, area: "Salud y Bienestar" }, { program: "TS en Ciencias de Datos e Inteligencia Artificial", score: 81, area: "Tecnología e Innovación" }, { program: "TS en Desarrollo de Software", score: 74, area: "Tecnología e Innovación" }], catalogVersion: CATALOG_VERSION, createdAt: new Date() },
+      { id: 1, firstName: "Ana", lastName: "Pérez", age: 17, sex: "Femenino", locality: "San Salvador de Jujuy", educationStatus: "Secundario: último año", studyIntent: "Sí, definitivamente", dataConsent: true, resultProgram: "TS en Desarrollo de Software", resultArea: "Tecnología e Innovación", selections: [], scoreSnapshot: [{ program: "TS en Desarrollo de Software", score: 90, area: "Tecnología e Innovación" }, { program: "TS en Ciencia de Datos e Inteligencia Artificial", score: 83, area: "Tecnología e Innovación" }, { program: "TS en Estadística de Salud", score: 76, area: "Salud y Bienestar" }], catalogVersion: CATALOG_VERSION, createdAt: new Date() },
+      { id: 2, firstName: "Luis", lastName: "Gómez", age: 21, sex: "Masculino", locality: "Palpalá", educationStatus: "Egresé del secundario", studyIntent: "Sí, probablemente", dataConsent: true, resultProgram: "TS en Desarrollo de Software", resultArea: "Tecnología e Innovación", selections: [], scoreSnapshot: [{ program: "TS en Desarrollo de Software", score: 91, area: "Tecnología e Innovación" }, { program: "TS en Ciencia de Datos e Inteligencia Artificial", score: 82, area: "Tecnología e Innovación" }, { program: "TS en Enfermería", score: 75, area: "Salud y Bienestar" }], catalogVersion: CATALOG_VERSION, createdAt: new Date() },
+      { id: 3, firstName: "Sol", lastName: "Díaz", age: 37, sex: "Femenino", locality: "San Salvador de Jujuy", educationStatus: "Estudio o trabajo actualmente", studyIntent: "Aún no lo decido", dataConsent: true, resultProgram: "TS en Enfermería", resultArea: "Salud y Bienestar", selections: [], scoreSnapshot: [{ program: "TS en Enfermería", score: 92, area: "Salud y Bienestar" }, { program: "TS en Ciencia de Datos e Inteligencia Artificial", score: 81, area: "Tecnología e Innovación" }, { program: "TS en Desarrollo de Software", score: 74, area: "Tecnología e Innovación" }], catalogVersion: CATALOG_VERSION, createdAt: new Date() },
     ] as any;
     const analytics = calculateAnalytics(rows);
 
     expect(analytics.totalAll).toBe(3);
-    expect(analytics.total).toBe(1);
-    expect(analytics.averageAge).toBe(37);
-    expect(analytics.catalogViews).toHaveLength(4);
-    expect(analytics.catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION)).toMatchObject({ total: 2, programCount: 19 });
-    expect(analytics.catalogViews.find((view) => view.version === "2026.08-oficial-18")).toMatchObject({ total: 0, programCount: 18 });
-    expect(analytics.catalogViews.find((view) => view.version === CATALOG_VERSION)).toMatchObject({ total: 1, programCount: 17, topProgram: { program: "TS en Enfermería", count: 1 } });
-    expect(analytics.catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION)?.localityDistribution).toEqual([{ label: "Otros / No revelado", value: 2 }]);
-    expect(analytics.catalogViews.find((view) => view.version === "2026.08-historico-consolidado")).toMatchObject({ total: 3, programCount: 19, isConsolidated: true, topProgram: { program: "TS en Desarrollo de Software", count: 2 }, localityDistribution: [{ label: "Otros / No revelado", value: 3 }] });
+    expect(analytics.total).toBe(3);
+    expect(analytics.averageAge).toBe(25);
+    expect(analytics.catalogViews).toHaveLength(1);
+    expect(analytics.catalogViews[0]).toMatchObject({ total: 3, programCount: 18, topProgram: { program: "TS en Desarrollo de Software", count: 2 } });
   });
 });

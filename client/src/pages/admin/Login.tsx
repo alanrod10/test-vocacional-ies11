@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Lock, User, ShieldCheck, ArrowLeft, Loader2 } from "lucide-react";
+import { InstitutionalFooter } from "@/components/InstitutionalFooter";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
@@ -137,6 +138,7 @@ export default function AdminLogin() {
           </div>
         </div>
       </div>
+      <InstitutionalFooter />
     </div>
   );
 }

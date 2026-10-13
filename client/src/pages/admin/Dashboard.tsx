@@ -31,6 +31,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { HISTORICAL_ARCHIVE } from "@shared/archive";
+import { InstitutionalFooter } from "@/components/InstitutionalFooter";
 
 const AREA_META: Record<string, { label: string; color: string }> = {
   "Tecnología e Innovación": { label: "Tecnología e Innovación", color: "#1976b7" },
@@ -66,15 +67,10 @@ export default function AdminDashboard() {
     },
   });
 
-  const [selectedCatalogVersion, setSelectedCatalogVersion] = useState<string | null>(null);
-
-  const analytics = trpc.vocational.analytics.useQuery(
-    selectedCatalogVersion ? { catalogVersion: selectedCatalogVersion } : undefined,
-    {
-      enabled: !!meQuery.data,
-      refetchInterval: 30_000,
-    }
-  );
+  const analytics = trpc.vocational.analytics.useQuery(undefined, {
+    enabled: !!meQuery.data,
+    refetchInterval: 30_000,
+  });
 
   const exportCsv = trpc.vocational.exportCsv.useMutation();
   const createResetChallenge = trpc.vocational.createResetChallenge.useMutation();
@@ -220,18 +216,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const catalogViews = analytics.data?.catalogViews ?? [];
-  const defaultCatalogView =
-    catalogViews.find((view: any) => view.version === "2026.08-oficial-18" && view.total > 0) ??
-    catalogViews.find((view: any) => view.version === "2026.08-legado-19") ??
-    catalogViews[0];
-
-  const analyticsView =
-    catalogViews.find((view: any) => view.version === selectedCatalogVersion) ??
-    defaultCatalogView ??
-    analytics.data;
-
-  const isConsolidatedCatalogView = (analyticsView as any)?.isConsolidated === true;
+  const analyticsView = analytics.data;
   const ranking = analyticsView?.ranking ?? [];
   const areaData = analyticsView?.areaDistribution ?? [];
   const hasSafeDemographicSample = (analyticsView?.total ?? 0) >= 5;
@@ -444,48 +429,25 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {/* Selector de Catálogo */}
-            <div className="mb-5 rounded-2xl border border-[#d8ecfb] bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            {/* Indicador de Catálogo Oficial */}
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#bfe8ff] bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e7ecff] text-[#1976b7]">
+                  <Sparkles size={20} />
+                </span>
                 <div>
-                  <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#1976b7]">
-                    Serie analítica
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#1976b7]">
+                    Catálogo Único Oficial
                   </p>
-                  <p className="mt-1 font-bold text-[#102d54]">
-                    {analyticsView?.label ?? "Catálogo de tecnicaturas"}
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-[#526064]">
-                    {isConsolidatedCatalogView
-                      ? "Esta vista suma resultados de ambos catálogos para una lectura histórica global."
-                      : "Cada serie conserva su catálogo original (18 o 19 tecnicaturas)."}
+                  <p className="mt-0.5 font-display text-base font-extrabold text-[#102d54]">
+                    18 Tecnicaturas Superiores del IES N.° 11
                   </p>
                 </div>
-
-                {catalogViews.length > 1 && (
-                  <select
-                    aria-label="Seleccionar versión de catálogo"
-                    value={selectedCatalogVersion ?? analyticsView?.version ?? ""}
-                    onChange={(e) => setSelectedCatalogVersion(e.target.value)}
-                    className="min-h-[44px] rounded-xl border border-[#bfe8ff] bg-white px-3 py-2 text-sm font-bold text-[#155f98] outline-none focus:ring-4 focus:ring-[#1976b7]/15"
-                  >
-                    {catalogViews.map((view: any) => (
-                      <option key={view.version} value={view.version}>
-                        {view.label} · {view.total} casos
-                      </option>
-                    ))}
-                  </select>
-                )}
               </div>
-
-              {isConsolidatedCatalogView && (
-                <div className="mt-3 flex gap-2 rounded-xl border border-[#f2d5a5] bg-[#fff9ec] px-3 py-2 text-xs leading-relaxed text-[#745218]">
-                  <ShieldCheck className="mt-0.5 shrink-0 text-[#745218]" size={15} />
-                  <p>
-                    <strong>Lectura histórica consolidada:</strong> incluye las evaluaciones de
-                    ambas versiones del catálogo.
-                  </p>
-                </div>
-              )}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dff7ef] px-3.5 py-1.5 text-xs font-black text-[#08714d]">
+                <span className="h-2 w-2 rounded-full bg-[#10a979]" />
+                Oferta Oficial Vigente
+              </span>
             </div>
 
             {/* Tarjetas KPI */}
@@ -522,7 +484,7 @@ export default function AdminDashboard() {
               <div className="mt-6 rounded-[2rem] border border-dashed border-[#cdd5d2] bg-white p-12 text-center shadow-sm">
                 <Users size={32} className="mx-auto text-[#1976b7]" />
                 <h3 className="mt-3 font-display text-xl font-extrabold text-[#102d54]">
-                  Aún no se registran evaluaciones para esta serie
+                  Aún no se registran evaluaciones
                 </h3>
                 <p className="mt-1 text-sm text-[#526064]">
                   Los datos aparecerán aquí tan pronto como los participantes completen el test.
@@ -533,7 +495,7 @@ export default function AdminDashboard() {
                 {/* Ranking de Carreras */}
                 <div className="rounded-[1.65rem] border border-white bg-white p-6 shadow-sm">
                   <h3 className="font-display text-xl font-extrabold text-[#102d54]">
-                    Ranking de Carreras ({analyticsView?.programCount ?? ranking.length})
+                    Ranking de las 18 Tecnicaturas Superiores
                   </h3>
                   <p className="mb-4 text-xs font-semibold text-[#526064]">
                     Frecuencia de afinidad número uno por tecnicatura
@@ -697,6 +659,7 @@ export default function AdminDashboard() {
           </>
         )}
       </main>
+      <InstitutionalFooter />
     </div>
   );
 }

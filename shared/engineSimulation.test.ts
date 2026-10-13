@@ -24,7 +24,7 @@ describe("Laboratorio del Motor: Pruebas Sintéticas y Simulaciones (Sección 12
       const scores = scoreSelections(lineA);
 
       expect(hasScorableSignal(lineA)).toBe(true);
-      expect(scores).toHaveLength(17);
+      expect(scores).toHaveLength(18);
       // Con todas las opciones 0, gana Agente Sanitario con 72 puntos, empatado con Gerontología en puntaje
       expect(scores[0].program).toBe("TS en Agente Sanitario y Promotor de la Salud");
       expect(scores[0].score).toBe(72);
@@ -42,7 +42,7 @@ describe("Laboratorio del Motor: Pruebas Sintéticas y Simulaciones (Sección 12
       });
 
       const scores = scoreSelections(lineB);
-      expect(scores[0].program).toBe("TS en Gestión de Energías Renovables");
+      expect(scores[0].program).toBe("TS en Gestión de Energía Renovable");
       expect(scores[0].score).toBe(82);
       expect(scores[0].area).toBe("Industria, Ambiente y Seguridad");
     });
@@ -139,19 +139,19 @@ describe("Laboratorio del Motor: Pruebas Sintéticas y Simulaciones (Sección 12
       const simulation = runEngineSimulation(1000, 12345);
 
       expect(simulation.totalSimulations).toBe(1000);
-      expect(simulation.expectedPercentage).toBeCloseTo(5.88, 1);
+      expect(simulation.expectedPercentage).toBeCloseTo(5.56, 1);
 
       // Se registran empates exactos en primer puesto
       expect(simulation.exactTiesCount).toBeGreaterThan(40);
       expect(simulation.exactTiesPercentage).toBeGreaterThan(4);
       expect(simulation.exactTiesPercentage).toBeLessThan(10);
 
-      // Todas las 17 carreras activas son evaluadas
-      expect(simulation.programs).toHaveLength(17);
+      // Todas las 18 carreras activas son evaluadas
+      expect(simulation.programs).toHaveLength(18);
 
-      // Verificación de que Asistente Odontológico y Energías Renovables lideran la sobrerrepresentación
+      // Verificación de que Asistencia Odontológica y Gestión de Energía Renovable lideran la sobrerrepresentación
       const topProgram = simulation.programs[0];
-      expect(["TS en Asistente Odontológico", "TS en Gestión de Energías Renovables"]).toContain(topProgram.name);
+      expect(["TS en Asistencia Odontológica", "TS en Gestión de Energía Renovable"]).toContain(topProgram.name);
       expect(topProgram.top1Ratio).toBeGreaterThan(1.8);
 
       // Verificación de que Gerontología se encuentra en la base de la distribución (bloqueo estructural)
@@ -180,19 +180,19 @@ describe("Laboratorio del Motor: Pruebas Sintéticas y Simulaciones (Sección 12
       });
     });
 
-    it("valida el modelado fundamentado de TS en Acompañamiento Terapéutico y su aislamiento del flujo público", () => {
+    it("valida el modelado fundamentado de TS en Acompañante Terapéutico y su integración oficial", () => {
       const atCandidate = CANDIDATE_V2_PROGRAMS.find((p) => p.id === "ts_acompanamiento_terapeutico");
       expect(atCandidate).toBeDefined();
-      expect(atCandidate?.name).toBe("TS en Acompañamiento Terapéutico");
-      expect(atCandidate?.status).toBe("pendiente_de_modelado");
+      expect(atCandidate?.name).toBe("TS en Acompañante Terapéutico");
+      expect(atCandidate?.status).toBe("activa");
       expect(atCandidate?.area).toBe("Salud y Bienestar");
       expect(atCandidate?.interests).toEqual({ R: 1, I: 3, A: 2, S: 5, E: 1, C: 2 });
       expect(atCandidate?.subjects.length).toBeGreaterThanOrEqual(3);
       expect(atCandidate?.tasks.length).toBeGreaterThanOrEqual(3);
 
-      // Aislamiento: no figura en las 17 carreras públicas activas de producción
-      expect(ACTIVE_PROGRAM_NAMES).not.toContain("TS en Acompañamiento Terapéutico");
-      expect(ACTIVE_PROGRAM_NAMES).toHaveLength(17);
+      // Integración: figura en las 18 carreras públicas activas de producción
+      expect(ACTIVE_PROGRAM_NAMES).toContain("TS en Acompañante Terapéutico");
+      expect(ACTIVE_PROGRAM_NAMES).toHaveLength(18);
       expect(CANDIDATE_V2_PROGRAM_NAMES).toHaveLength(18);
     });
 
@@ -295,8 +295,8 @@ describe("Laboratorio del Motor: Pruebas Sintéticas y Simulaciones (Sección 12
       const maxTop1Pct = (rows[0].c1 / N) * 100;
       expect(maxTop1Pct).toBeLessThan(25);
 
-      // 3. A.T. (TS en Acompañamiento Terapéutico) tiene un desempeño saludable y competitivo
-      const atTop1 = top1Counts["TS en Acompañamiento Terapéutico"];
+      // 3. A.T. (TS en Acompañante Terapéutico) tiene un desempeño saludable y competitivo
+      const atTop1 = top1Counts["TS en Acompañante Terapéutico"];
       expect(atTop1).toBeGreaterThan(500);
     }, 30000);
   });

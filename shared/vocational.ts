@@ -61,7 +61,7 @@ export const AREA_META: Record<AreaKey, { icon: string; color: string; soft: str
 
 export const INSTITUTION_INFO = {
   name: "Instituto de Educación Superior N.° 11",
-  offer: "Oferta académica vigente: 17 Tecnicaturas Superiores.",
+  offer: "Oferta académica oficial: 18 Tecnicaturas Superiores.",
   address: "Alvear 1151, San Salvador de Jujuy.",
   enrolment: "Preinscripción: consultá la plataforma NEXO de Educación de Jujuy y los canales institucionales para fechas vigentes.",
   website: "https://ies11jujuy.wixsite.com/misitio",
@@ -122,7 +122,7 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_administracion_salud",
-    "TS en Administración en Servicios de Salud",
+    "TS en Administración de Servicios de Salud",
     "activa",
     "Salud y Bienestar",
     V({ I: 1, S: 2, E: 2, C: 5 }),
@@ -146,7 +146,7 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_estadisticas_salud",
-    "TS en Estadísticas de Salud",
+    "TS en Estadística de Salud",
     "activa",
     "Salud y Bienestar",
     V({ I: 4, S: 1, E: 1, C: 5 }),
@@ -158,7 +158,7 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_asistente_odontologico",
-    "TS en Asistente Odontológico",
+    "TS en Asistencia Odontológica",
     "activa",
     "Salud y Bienestar",
     V({ R: 2, I: 2, S: 4, C: 3 }),
@@ -182,7 +182,7 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_laboratorio_analisis_clinico",
-    "TS en Laboratorio de Análisis Clínico",
+    "TS en Laboratorio de Análisis Clínicos",
     "activa",
     "Salud y Bienestar",
     V({ R: 2, I: 5, S: 1, C: 3 }),
@@ -194,8 +194,8 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_acompanamiento_terapeutico",
-    "TS en Acompañamiento Terapéutico",
-    "pendiente_de_modelado",
+    "TS en Acompañante Terapéutico",
+    "activa",
     "Salud y Bienestar",
     V({ R: 1, I: 3, A: 2, S: 5, E: 1, C: 2 }),
     "Brinda sostén emocional, revinculación comunitaria y asistencia en la cotidianeidad a personas en situaciones de vulnerabilidad, salud mental o tratamientos médicos, promoviendo su autonomía y dignidad.",
@@ -211,7 +211,7 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_ciencias_datos_ia",
-    "TS en Ciencias de Datos e Inteligencia Artificial",
+    "TS en Ciencia de Datos e Inteligencia Artificial",
     "activa",
     "Tecnología e Innovación",
     V({ I: 5, A: 1, E: 2, C: 3 }),
@@ -235,7 +235,7 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_seguridad_higiene_laboral",
-    "TS en Seguridad e Higiene Laboral",
+    "TS en Higiene y Seguridad en el Trabajo",
     "activa",
     "Industria, Ambiente y Seguridad",
     V({ R: 4, I: 2, S: 1, E: 1, C: 4 }),
@@ -247,7 +247,7 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
   P(
     "ts_gestion_energias_renovables",
-    "TS en Gestión de Energías Renovables",
+    "TS en Gestión de Energía Renovable",
     "activa",
     "Industria, Ambiente y Seguridad",
     V({ R: 5, I: 3, A: 1, S: 1, E: 1, C: 1 }),
@@ -355,34 +355,65 @@ export const PROGRAM_CATALOG: ProgramDefinition[] = [
   ),
 ];
 
+export const LEGACY_NAME_ALIASES: Record<string, string> = {
+  "TS en Administración en Servicios de Salud": "TS en Administración de Servicios de Salud",
+  "TS en Asistente Odontológico": "TS en Asistencia Odontológica",
+  "TS en Acompañamiento Terapéutico": "TS en Acompañante Terapéutico",
+  "TS en Ciencias de Datos e Inteligencia Artificial": "TS en Ciencia de Datos e Inteligencia Artificial",
+  "TS en Seguridad e Higiene Laboral": "TS en Higiene y Seguridad en el Trabajo",
+  "TS en Gestión de Energías Renovables": "TS en Gestión de Energía Renovable",
+  "TS en Estadísticas de Salud": "TS en Estadística de Salud",
+  "TS en Laboratorio de Análisis Clínico": "TS en Laboratorio de Análisis Clínicos",
+};
+
 export const PROGRAM_BY_ID: Record<string, ProgramDefinition> = Object.fromEntries(PROGRAM_CATALOG.map((p) => [p.id, p]));
-export const PROGRAM_BY_NAME: Record<string, ProgramDefinition> = Object.fromEntries(PROGRAM_CATALOG.map((p) => [p.name, p]));
+
+const officialProgramsByName = Object.fromEntries(PROGRAM_CATALOG.map((p) => [p.name, p]));
+const aliasProgramsByName = Object.fromEntries(
+  Object.entries(LEGACY_NAME_ALIASES)
+    .map(([alias, official]) => [alias, officialProgramsByName[official]])
+    .filter((entry): entry is [string, ProgramDefinition] => Boolean(entry[1]))
+);
+
+export const PROGRAM_BY_NAME: Record<string, ProgramDefinition> = {
+  ...officialProgramsByName,
+  ...aliasProgramsByName,
+};
 
 export const ACTIVE_PROGRAMS = PROGRAM_CATALOG.filter((p) => p.status === "activa");
 export const ACTIVE_PROGRAM_IDS = ACTIVE_PROGRAMS.map((p) => p.id);
 export const ACTIVE_PROGRAM_NAMES = ACTIVE_PROGRAMS.map((p) => p.name);
 
-export const CANDIDATE_V2_PROGRAMS = PROGRAM_CATALOG.filter(
-  (p) => p.status === "activa" || p.id === "ts_acompanamiento_terapeutico",
-);
-export const CANDIDATE_V2_PROGRAM_IDS = CANDIDATE_V2_PROGRAMS.map((p) => p.id);
-export const CANDIDATE_V2_PROGRAM_NAMES = CANDIDATE_V2_PROGRAMS.map((p) => p.name);
+export const CANDIDATE_V2_PROGRAMS = ACTIVE_PROGRAMS;
+export const CANDIDATE_V2_PROGRAM_IDS = ACTIVE_PROGRAM_IDS;
+export const CANDIDATE_V2_PROGRAM_NAMES = ACTIVE_PROGRAM_NAMES;
 
-export const PROGRAMS: Record<string, ProgramProfile> = Object.fromEntries(ACTIVE_PROGRAMS.map((p) => [p.name, p]));
+const activeProgramsRecord = Object.fromEntries(ACTIVE_PROGRAMS.map((p) => [p.name, p]));
+const aliasActiveProgramsRecord = Object.fromEntries(
+  Object.entries(LEGACY_NAME_ALIASES)
+    .map(([alias, official]) => [alias, activeProgramsRecord[official]])
+    .filter((entry): entry is [string, ProgramProfile] => Boolean(entry[1]))
+);
+
+export const PROGRAMS: Record<string, ProgramProfile> = {
+  ...activeProgramsRecord,
+  ...aliasActiveProgramsRecord,
+};
 export const PROGRAM_NAMES = ACTIVE_PROGRAM_NAMES;
 
-export const ALL_PROGRAMS: Record<string, ProgramProfile> = Object.fromEntries(PROGRAM_CATALOG.map((p) => [p.name, p]));
+export const ALL_PROGRAMS: Record<string, ProgramProfile> = {
+  ...Object.fromEntries(PROGRAM_CATALOG.map((p) => [p.name, p])),
+  ...aliasProgramsByName,
+};
 export const ALL_PROGRAM_NAMES = PROGRAM_CATALOG.map((p) => p.name);
 
-export const LEGACY_PROGRAMS: Record<string, ProgramProfile> = Object.fromEntries(
-  PROGRAM_CATALOG.filter((p) => p.status !== "pendiente_de_modelado").map((p) => [p.name, p]),
-);
-export const LEGACY_PROGRAM_NAMES = Object.keys(LEGACY_PROGRAMS);
+export const LEGACY_PROGRAMS: Record<string, ProgramProfile> = PROGRAMS;
+export const LEGACY_PROGRAM_NAMES = PROGRAM_NAMES;
 
 export const ENGINE_VERSION = "2026.10-ids-estables";
-export const LEGACY_CATALOG_VERSION = "2026.08-legado-19";
-export const EXPO_CATALOG_VERSION = "2026.08-oficial-18";
-export const CATALOG_VERSION = "2026.10-oficial-17";
+export const CATALOG_VERSION = "2026.10-oficial-18";
+export const EXPO_CATALOG_VERSION = "2026.10-oficial-18";
+export const LEGACY_CATALOG_VERSION = "2026.10-oficial-18";
 export const RETIRED_PROGRAM = "TS en Museología y Gestión Patrimonial";
 export const RETIRED_PROGRAMS = ["TS en Museología y Gestión Patrimonial", "TS en Guía de Turismo"];
 
@@ -666,11 +697,11 @@ export const OPTION_ANCHORS: Record<string, string[]> = {
   opt_organization: ["ts_administracion_salud", "ts_turismo"],
 
   // q_direct_support
-  opt_caring: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_asistente_odontologico"],
+  opt_caring: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_asistente_odontologico", "ts_acompanamiento_terapeutico"],
   opt_technical: ["ts_laboratorio_analisis_clinico", "ts_administracion_salud", "ts_estadisticas_salud"],
 
   // q_new_problem
-  opt_people_needs: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_guia_turismo"],
+  opt_people_needs: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_acompanamiento_terapeutico"],
   opt_data_patterns: ["ts_ciencias_datos_ia", "ts_estadisticas_salud", "ts_administracion_salud"],
   opt_test_tools: ["ts_desarrollo_software", "ts_gestion_energias_renovables", "ts_tecnologia_alimentos"],
   opt_creative_presentation: ["ts_diseno_indumentaria", "ts_museologia"],
@@ -690,7 +721,7 @@ export const OPTION_ANCHORS: Record<string, string[]> = {
   // q_tourist_improvement
   opt_hospitality_management: ["ts_hoteleria"],
   opt_tour_route_design: ["ts_turismo"],
-  opt_cultural_storytelling: ["ts_guia_turismo"],
+  opt_cultural_storytelling: ["ts_turismo"],
   opt_regional_food: ["ts_cocinas_regionales"],
 
   // q_community_objects
@@ -700,7 +731,7 @@ export const OPTION_ANCHORS: Record<string, string[]> = {
   opt_digital_catalog: ["ts_desarrollo_software", "ts_ciencias_datos_ia"],
 
   // q_health_space
-  opt_patient_care: ["ts_enfermeria", "ts_gerontologia"],
+  opt_patient_care: ["ts_enfermeria", "ts_gerontologia", "ts_acompanamiento_terapeutico"],
   opt_dental_assistance: ["ts_asistente_odontologico", "ts_laboratorio_analisis_clinico"],
   opt_health_promotion: ["ts_agente_sanitario"],
   opt_lab_analysis: ["ts_estadisticas_salud", "ts_administracion_salud", "ts_laboratorio_analisis_clinico"],
@@ -718,17 +749,17 @@ export const OPTION_ANCHORS: Record<string, string[]> = {
   opt_craft_improving: ["ts_diseno_indumentaria", "ts_cocinas_regionales"],
 
   // q_project_satisfaction
-  opt_community_impact: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_guia_turismo", "ts_museologia"],
+  opt_community_impact: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_acompanamiento_terapeutico", "ts_museologia"],
   opt_technical_solution: ["ts_ciencias_datos_ia", "ts_desarrollo_software", "ts_estadisticas_salud", "ts_laboratorio_analisis_clinico", "ts_gestion_energias_renovables", "ts_tecnologia_alimentos"],
 
   // q_daily_challenge
   opt_data_clarity: ["ts_estadisticas_salud", "ts_administracion_salud", "ts_ciencias_datos_ia"],
   opt_software_building: ["ts_desarrollo_software"],
   opt_traceable_prep: ["ts_laboratorio_analisis_clinico", "ts_asistente_odontologico", "ts_tecnologia_alimentos"],
-  opt_teaching_groups: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_guia_turismo"],
+  opt_teaching_groups: ["ts_enfermeria", "ts_gerontologia", "ts_agente_sanitario", "ts_acompanamiento_terapeutico"],
 
   // q_weekly_internship
-  opt_intern_community_health: ["ts_agente_sanitario", "ts_gerontologia"],
+  opt_intern_community_health: ["ts_agente_sanitario", "ts_gerontologia", "ts_acompanamiento_terapeutico"],
   opt_intern_health_admin: ["ts_administracion_salud"],
   opt_intern_workplace_safety: ["ts_seguridad_higiene_laboral"],
   opt_intern_food_inspection: ["ts_tecnologia_alimentos"],

@@ -141,21 +141,21 @@ describe("Analítica agregada y supresión de privacidad (AG-12)", () => {
     expect(sanSalvadorItem?.value).toBe(10);
   });
 
-  it("separa las series analíticas por catalogVersion sin mezclar series históricas", () => {
+  it("consolida y clasifica correctamente las evaluaciones dentro del catálogo oficial de 18 tecnicaturas", () => {
     const syntheticData = [
       {
         id: 1,
         resultProgram: "TS en Desarrollo de Software",
         resultArea: "Tecnología e Innovación",
-        catalogVersion: LEGACY_CATALOG_VERSION,
+        catalogVersion: CATALOG_VERSION,
         scoreSnapshot: [{ program: "TS en Desarrollo de Software", score: 90, area: "Tecnología e Innovación" }],
       },
       {
         id: 2,
-        resultProgram: "TS en Acompañamiento Terapéutico", // Solo en legado
+        resultProgram: "TS en Acompañante Terapéutico",
         resultArea: "Salud y Bienestar",
-        catalogVersion: LEGACY_CATALOG_VERSION,
-        scoreSnapshot: [{ program: "TS en Acompañamiento Terapéutico", score: 85, area: "Salud y Bienestar" }],
+        catalogVersion: CATALOG_VERSION,
+        scoreSnapshot: [{ program: "TS en Acompañante Terapéutico", score: 85, area: "Salud y Bienestar" }],
       },
       {
         id: 3,
@@ -168,17 +168,13 @@ describe("Analítica agregada y supresión de privacidad (AG-12)", () => {
 
     const result = calculateAnalytics(syntheticData);
 
-    const legacyView = result.catalogViews.find((v) => v.version === LEGACY_CATALOG_VERSION);
     const officialView = result.catalogViews.find((v) => v.version === CATALOG_VERSION);
 
-    expect(legacyView?.total).toBe(2);
-    expect(legacyView?.programCount).toBe(19);
+    expect(officialView?.total).toBe(3);
+    expect(officialView?.programCount).toBe(18);
 
-    expect(officialView?.total).toBe(1);
-    expect(officialView?.programCount).toBe(17);
-
-    // El catálogo oficial de 17 carreras no debe incluir carreras retiradas
-    expect(officialView?.ranking.find((r) => r.program === "TS en Acompañamiento Terapéutico")).toBeUndefined();
+    // El catálogo oficial de 18 carreras incluye TS en Acompañante Terapéutico
+    expect(officialView?.ranking.find((r) => r.program === "TS en Acompañante Terapéutico")).toBeDefined();
   });
 
   it("calcula la frecuencia y tasa de empates en el 1.er lugar", () => {

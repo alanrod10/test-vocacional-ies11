@@ -69,13 +69,13 @@ export const HISTORICAL_ARCHIVE = {
   },
   get event(): string {
     return isHistoricalMode()
-      ? "Expo Educativa 2026 · IES N.° 11, Jujuy"
-      : "Test Vocacional Institucional · IES N.° 11, Jujuy";
+      ? "Archivo Histórico Institucional · IES N.° 11, Jujuy"
+      : "Sistema de Orientación Vocacional para Ingresantes · IES N.° 11, Jujuy";
   },
   get statusLabel(): string {
     return isHistoricalMode()
       ? "Archivo histórico cerrado"
-      : "Instancia permanente activa";
+      : "Sistema institucional activo";
   },
   get allowNewAssessments(): boolean {
     return !isHistoricalMode();
@@ -89,4 +89,4 @@ export const HISTORICAL_ARCHIVE = {
 };
 
 export const HISTORICAL_ARCHIVE_MESSAGE =
-  "Esta versión histórica de la Expo Educativa 2026 está cerrada y ya no recibe nuevas respuestas.";
+  "Esta versión del sistema se encuentra en modo de preservación histórica y ya no recibe nuevas respuestas.";

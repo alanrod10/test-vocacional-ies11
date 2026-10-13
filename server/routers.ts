@@ -20,7 +20,7 @@ import {
 } from "./db";
 import { safeDistributionRecord } from "./privacySuppression";
 import { clearAdminCookie, setAdminCookie, signAdminToken } from "./_core/adminAuth";
-import { CANDIDATE_V2_PROGRAM_NAMES, CATALOG_VERSION, ENGINE_VERSION, EXPO_CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_CATALOG, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, RETIRED_PROGRAM, getInterestProfile, hasScorableSignal, normalizeSelections, scoreSelections } from "../shared/vocational";
+import { CANDIDATE_V2_PROGRAM_NAMES, CATALOG_VERSION, ENGINE_VERSION, EXPO_CATALOG_VERSION, LEGACY_CATALOG_VERSION, LEGACY_NAME_ALIASES, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS, PROGRAM_CATALOG, PROGRAM_NAMES, PROGRAMS, QUESTIONNAIRE_VERSION, QUESTIONS, RETIRED_PROGRAM, getInterestProfile, hasScorableSignal, normalizeSelections, scoreSelections } from "../shared/vocational";
 import { HISTORICAL_ARCHIVE, HISTORICAL_ARCHIVE_MESSAGE } from "../shared/archive";
 
 export function categorizeAge(age?: number | null, ageGroup?: string | null): string {
@@ -146,7 +146,7 @@ function calculateCatalogAnalytics(
   rows: Awaited<ReturnType<typeof listVocationalAssessments>>,
   programNames: string[],
   programs: Record<string, { area: string }>,
-  isConsolidated = false
+  _isConsolidated = false
 ) {
   const total = rows.length;
   const programCounts = Object.fromEntries(programNames.map((program) => [program, 0])) as Record<string, number>;
@@ -160,11 +160,19 @@ function calculateCatalogAnalytics(
   let tieCount = 0;
 
   rows.forEach((row) => {
-    programCounts[row.resultProgram] = (programCounts[row.resultProgram] ?? 0) + 1;
+    const prog = PROGRAMS[row.resultProgram] ? row.resultProgram : (LEGACY_NAME_ALIASES[row.resultProgram] ?? row.resultProgram);
+    if (programCounts[prog] !== undefined) {
+      programCounts[prog] = (programCounts[prog] ?? 0) + 1;
+    }
+
     const storedTopThree = (row.scoreSnapshot || [])
+      .map((item) => ({
+        ...item,
+        program: PROGRAMS[item.program] ? item.program : (LEGACY_NAME_ALIASES[item.program] ?? item.program),
+      }))
       .filter((item) => programNames.includes(item.program))
       .slice(0, 3);
-    const placements = storedTopThree.length ? storedTopThree : [{ program: row.resultProgram, area: row.resultArea, score: 0 }];
+    const placements = storedTopThree.length ? storedTopThree : [{ program: prog, area: row.resultArea, score: 0 }];
     placements.forEach((item, index) => {
       const counts = topThreeCounts[item.program];
       if (!counts) return;
@@ -178,7 +186,8 @@ function calculateCatalogAnalytics(
       tieCount += 1;
     }
 
-    areaCounts[row.resultArea] = (areaCounts[row.resultArea] ?? 0) + 1;
+    const area = programs[prog]?.area ?? row.resultArea;
+    areaCounts[area] = (areaCounts[area] ?? 0) + 1;
     sexCounts[row.sex] = (sexCounts[row.sex] ?? 0) + 1;
     localityCounts[row.locality] = (localityCounts[row.locality] ?? 0) + 1;
     educationCounts[row.educationStatus] = (educationCounts[row.educationStatus] ?? 0) + 1;
@@ -233,78 +242,25 @@ function calculateCatalogAnalytics(
 
 export function calculateAnalytics(
   rows: Awaited<ReturnType<typeof listVocationalAssessments>>,
-  catalogVersionFilter?: string
+  _catalogVersionFilter?: string
 ) {
-  const legacyRows = rows.filter((row) => row.catalogVersion === LEGACY_CATALOG_VERSION);
-  const expo18Programs = PROGRAM_CATALOG.filter((p) => p.name !== RETIRED_PROGRAM && p.name !== "TS en Acompañamiento Terapéutico");
-  const expo18ProgramNames = expo18Programs.map((p) => p.name);
-  const expo18ProgramsRecord = Object.fromEntries(expo18Programs.map((p) => [p.name, p]));
-  const expoRows = rows.filter((row) => row.catalogVersion === "2026.08-oficial-18");
-  const officialRows = rows.filter((row) => row.catalogVersion === CATALOG_VERSION);
+  const officialAnalytics = calculateCatalogAnalytics(rows, PROGRAM_NAMES, PROGRAMS);
 
-  const consolidatedProgramNames = Array.from(new Set([...LEGACY_PROGRAM_NAMES, ...PROGRAM_NAMES]));
-  const consolidatedPrograms = { ...LEGACY_PROGRAMS, ...PROGRAMS };
-  const recognizedRows = [...legacyRows, ...expoRows, ...officialRows];
-  const unknownRows = rows.filter(
-    (row) =>
-      row.catalogVersion !== LEGACY_CATALOG_VERSION &&
-      row.catalogVersion !== "2026.08-oficial-18" &&
-      row.catalogVersion !== CATALOG_VERSION
-  );
+  const officialView = {
+    version: CATALOG_VERSION,
+    label: "Catálogo Único Oficial (18 Tecnicaturas Superiores)",
+    programCount: PROGRAM_NAMES.length,
+    ...officialAnalytics,
+  };
 
-  const unknownCatalogVersions = Array.from(new Set(unknownRows.map((row) => row.catalogVersion)));
-  const unknownViews = unknownCatalogVersions.map((uVer) => {
-    const uRows = rows.filter((r) => r.catalogVersion === uVer);
-    return {
-      version: uVer,
-      label: `Catálogo experimental / borrador (${uVer})`,
-      programCount: CANDIDATE_V2_PROGRAM_NAMES.length,
-      ...calculateCatalogAnalytics(uRows, CANDIDATE_V2_PROGRAM_NAMES, { ...consolidatedPrograms, "TS en Acompañamiento Terapéutico": { area: "Salud y Bienestar" } }),
-    };
-  });
-
-  const catalogViews = [
-    {
-      version: LEGACY_CATALOG_VERSION,
-      label: "Catálogo histórico de 19 tecnicaturas",
-      programCount: LEGACY_PROGRAM_NAMES.length,
-      ...calculateCatalogAnalytics(legacyRows, LEGACY_PROGRAM_NAMES, LEGACY_PROGRAMS),
-    },
-    {
-      version: "2026.08-oficial-18",
-      label: "Oferta oficial Expo 2026 (18 tecnicaturas)",
-      programCount: 18,
-      ...calculateCatalogAnalytics(expoRows, expo18ProgramNames, expo18ProgramsRecord),
-    },
-    {
-      version: CATALOG_VERSION,
-      label: "Oferta oficial vigente de 17 tecnicaturas",
-      programCount: PROGRAM_NAMES.length,
-      ...calculateCatalogAnalytics(officialRows, PROGRAM_NAMES, PROGRAMS),
-    },
-    {
-      version: "2026.08-historico-consolidado",
-      label: "Consolidado histórico (17 + 18 + 19 TS)",
-      programCount: consolidatedProgramNames.length,
-      isConsolidated: true,
-      ...calculateCatalogAnalytics(recognizedRows, consolidatedProgramNames, consolidatedPrograms, true),
-    },
-    ...unknownViews,
-  ];
-
-  const active =
-    (catalogVersionFilter ? catalogViews.find((view) => view.version === catalogVersionFilter) : undefined) ??
-    catalogViews.find((view) => view.version === CATALOG_VERSION && view.total > 0) ??
-    catalogViews.find((view) => view.version === "2026.08-oficial-18" && view.total > 0) ??
-    catalogViews.find((view) => view.version === LEGACY_CATALOG_VERSION) ??
-    calculateCatalogAnalytics([], PROGRAM_NAMES, PROGRAMS);
+  const catalogViews = [officialView];
 
   return {
-    ...active,
+    ...officialAnalytics,
     totalAll: rows.length,
     catalogViews,
-    unknownCatalogTotal: unknownRows.length,
-    unknownCatalogVersions: Array.from(new Set(unknownRows.map((row) => row.catalogVersion))),
+    unknownCatalogTotal: 0,
+    unknownCatalogVersions: [],
   };
 }
 
